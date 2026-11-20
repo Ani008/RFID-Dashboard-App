@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <WebView
+        android:id="@+id/webview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Setup / reader test panel. Shown on first run, when the dashboard cannot load,
+         and when Back is pressed on the dashboard's first page. -->
+    <ScrollView
+        android:id="@+id/setup_panel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/white"
+        android:fillViewport="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/setup_title"
+                android:textColor="@color/black"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/reader_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/black"
+                android:textSize="16sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/setup_hint"
+                android:textColor="#FF555555"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/tag_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="#FFF2F2F2"
+                android:fontFamily="monospace"
+                android:minHeight="120dp"
+                android:padding="10dp"
+                android:text="@string/no_tags_yet"
+                android:textColor="@color/black"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btn_test_scan"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/test_scan_start" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/dashboard_url_label"
+                android:textColor="@color/black"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/dashboard_url"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:autofillHints="url"
+                android:hint="@string/dashboard_url_hint"
+                android:importantForAutofill="no"
+                android:inputType="textUri"
+                android:textColor="@color/black"
+                android:textColorHint="#FF888888" />
+
+            <Button
+                android:id="@+id/btn_save"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/save_and_load" />
+
+            <Button
+                android:id="@+id/btn_close"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/close_setup" />
+        </LinearLayout>
+    </ScrollView>
+</FrameLayout>

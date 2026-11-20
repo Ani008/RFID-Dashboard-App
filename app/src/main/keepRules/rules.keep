@@ -1,0 +1,9 @@
+# Project specific R8 rules. AGP combines all files in src/main/keepRules.
+
+# SEUIC vendor SDK: talks to system services by name, never rename or strip it.
+-keep class com.seuic.** { *; }
+
+# Methods the dashboard page calls through window.RFIDNative.
+-keepclassmembers class com.example.rfid.DashboardBridge {
+    @android.webkit.JavascriptInterface <methods>;
+}
