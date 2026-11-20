@@ -72,17 +72,9 @@ public final class UhfReader {
     private boolean reading;
 
     private ScanKeyService scanKeys;
-    private final IKeyEventCallback keyCallback = new IKeyEventCallback.Stub() {
-        @Override
-        public void onKeyDown(int keyCode) {
-            startReading();
-        }
-
-        @Override
-        public void onKeyUp(int keyCode) {
-            stopReading();
-        }
-    };
+    // Created lazily inside try/catch: if the SDK classes are only stubs (or missing) on this
+    // device, constructing IKeyEventCallback.Stub throws, and that must not crash the app.
+    private IKeyEventCallback keyCallback;
 
     public UhfReader(Context context, Listener listener) {
         this.context = context.getApplicationContext();
@@ -97,9 +89,23 @@ public final class UhfReader {
     public void resume() {
         worker.post(this::openInternal);
         try {
+            if (keyCallback == null) {
+                keyCallback = new IKeyEventCallback.Stub() {
+                    @Override
+                    public void onKeyDown(int keyCode) {
+                        startReading();
+                    }
+
+                    @Override
+                    public void onKeyUp(int keyCode) {
+                        stopReading();
+                    }
+                };
+            }
             scanKeys = ScanKeyService.getInstance();
             scanKeys.registerCallback(keyCallback, TRIGGER_KEYS);
         } catch (Throwable t) {
+            // Includes RuntimeException("Stub!") and NoClassDefFoundError.
             Log.w(TAG, "Trigger key service not available", t);
         }
     }
@@ -107,7 +113,7 @@ public final class UhfReader {
     /** Stops reading and hands the module back (so the vendor app can use it while we are hidden). */
     public void pause() {
         try {
-            if (scanKeys != null) {
+            if (scanKeys != null && keyCallback != null) {
                 scanKeys.unregisterCallback(keyCallback);
             }
         } catch (Throwable t) {

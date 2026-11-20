@@ -33,10 +33,11 @@ android {
 }
 
 dependencies {
-    // SEUIC vendor SDK (same two jars the vendor demo uses). The UHF classes are also
-    // provided by the reader's firmware via <uses-library> in the manifest.
-    implementation(files("libs/uhf.jar"))
-    implementation(files("libs/scankey.jar"))
+    // SEUIC vendor SDK. These jars are compile-time STUBS (every method throws "Stub!").
+    // compileOnly = compile against them but do NOT package them into the APK, so the real
+    // classes on the reader are used at runtime.
+    compileOnly(files("libs/uhf.jar"))
+    compileOnly(files("libs/scankey.jar"))
 
     implementation(libs.activity.ktx)
     implementation(libs.appcompat)
