@@ -71,6 +71,15 @@
                 android:layout_marginTop="8dp"
                 android:text="@string/test_scan_start" />
 
+            <Button
+                android:id="@+id/btn_launch_radar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#059669"
+                android:textColor="#FFFFFF"
+                android:text="🎯 Open Native Radar Locator" />
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

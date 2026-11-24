@@ -36,8 +36,8 @@ public final class UhfReader {
     /** Hardware trigger key codes (from the vendor demo: 100, 101, 102, 249, 250). */
     private static final String TRIGGER_KEYS = "100,101,102,249,250";
 
-    /** How often we read the SDK's tag list while the trigger is held. */
-    private static final long POLL_MS = 100;
+    /** Ultra-fast native SDK tag polling (~40 Hz for sub-30ms instant hardware identification). */
+    private static final long POLL_MS = 25;
 
     /** One tag as reported by the SDK. rssi is the raw SDK value (unit still to be confirmed). */
     public static final class Tag {
@@ -70,6 +70,7 @@ public final class UhfReader {
     private UHFService device;
     private boolean open;
     private boolean reading;
+    private volatile int power = 30; // default output power (dBm)
 
     private ScanKeyService scanKeys;
     // Created lazily inside try/catch: if the SDK classes are only stubs (or missing) on this
@@ -135,11 +136,19 @@ public final class UhfReader {
 
     // ---- reading ----
 
+    public int getPower() {
+        return power;
+    }
+
     public void startReading() {
         worker.post(() -> {
             if (reading) return;
             if (!open) openInternal();
             if (!open) return;
+            try {
+                int p = device.getPower();
+                if (p > 0) power = p;
+            } catch (Throwable ignored) {}
             try {
                 if (device.inventoryStart()) {
                     reading = true;
@@ -214,6 +223,10 @@ public final class UhfReader {
             if (open) {
                 // Start every trigger press with an empty list, so counts mean "this scan".
                 device.setParameters(UHFService.PARAMETER_CLEAR_EPCLIST_WHEN_START_INVENTORY, 1);
+                try {
+                    int p = device.getPower();
+                    if (p > 0) power = p;
+                } catch (Throwable ignored) {}
             }
         } catch (Throwable t) {
             // Includes NoClassDefFoundError on a device that is not a SEUIC reader.

@@ -31,14 +31,17 @@ public final class DashboardBridge {
 
     private static final String SOURCE = "seuic-utouch2";
 
+    private final android.content.Context context;
     private final UhfReader reader;
     private final String versionName;
 
     // Written on main thread, read from the WebView's JS thread.
     private volatile boolean available;
     private volatile boolean reading;
+    private volatile float heading = 0f;
 
-    public DashboardBridge(UhfReader reader, String versionName) {
+    public DashboardBridge(android.content.Context context, UhfReader reader, String versionName) {
+        this.context = context;
         this.reader = reader;
         this.versionName = versionName;
     }
@@ -51,6 +54,23 @@ public final class DashboardBridge {
     }
 
     @JavascriptInterface
+    public void openRadar(String fileId, String rfidTag, String fileName, String caseId, String storageLocation) {
+        if (context == null) return;
+        try {
+            android.content.Intent intent = new android.content.Intent(context, RadarActivity.class);
+            intent.putExtra("fileId", fileId != null ? fileId : "");
+            intent.putExtra("rfidTag", rfidTag != null ? rfidTag : "");
+            intent.putExtra("fileName", fileName != null ? fileName : "");
+            intent.putExtra("caseId", caseId != null ? caseId : "");
+            intent.putExtra("storageLocation", storageLocation != null ? storageLocation : "");
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        } catch (Throwable t) {
+            android.util.Log.e("DashboardBridge", "openRadar failed", t);
+        }
+    }
+
+    @JavascriptInterface
     public String getInfo() {
         try {
             return new JSONObject()
@@ -58,10 +78,17 @@ public final class DashboardBridge {
                     .put("version", versionName)
                     .put("available", available)
                     .put("reading", reading)
+                    .put("heading", heading)
+                    .put("power", reader.getPower())
                     .toString();
         } catch (JSONException e) {
             return "{}";
         }
+    }
+
+    @JavascriptInterface
+    public float getHeading() {
+        return heading;
     }
 
     @JavascriptInterface
@@ -81,18 +108,34 @@ public final class DashboardBridge {
         this.reading = reading;
     }
 
-    public static void sendTags(WebView web, List<UhfReader.Tag> tags) {
+    public void setHeading(float heading) {
+        this.heading = heading;
+    }
+
+    public static void sendHeading(WebView web, float heading) {
+        try {
+            JSONObject detail = new JSONObject()
+                    .put("heading", heading);
+            dispatch(web, "rfid:heading", detail);
+        } catch (JSONException ignored) {
+        }
+    }
+
+    public static void sendTags(WebView web, List<UhfReader.Tag> tags, float heading, int power) {
         try {
             JSONArray arr = new JSONArray();
             for (UhfReader.Tag t : tags) {
                 arr.put(new JSONObject()
                         .put("epc", t.epc)
                         .put("rssi", t.rssi)
-                        .put("count", t.count));
+                        .put("count", t.count)
+                        .put("heading", heading));
             }
             JSONObject detail = new JSONObject()
                     .put("source", SOURCE)
                     .put("ts", System.currentTimeMillis())
+                    .put("heading", heading)
+                    .put("power", power)
                     .put("tags", arr);
             dispatch(web, "rfid:read", detail);
         } catch (JSONException ignored) {

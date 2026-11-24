@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- Best effort only: lets us release the UHF module if the vendor UHF app is holding it.
          FORCE_STOP_PACKAGES is a system permission, so a normal install will not be granted it;
@@ -41,6 +42,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".RadarActivity"
+            android:screenOrientation="portrait"
+            android:exported="false"
+            android:theme="@style/Theme.RFID" />
     </application>
 
 </manifest>

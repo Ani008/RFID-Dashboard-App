@@ -5,6 +5,10 @@ import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.graphics.Bitmap;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
@@ -53,6 +57,19 @@ public class MainActivity extends AppCompatActivity implements UhfReader.Listene
     private UhfReader reader;
     private DashboardBridge bridge;
 
+    private SensorManager sensorManager;
+    private Sensor rotationSensor;
+    private Sensor accelSensor;
+    private Sensor magSensor;
+    private volatile float currentHeading = 0.0f;
+
+    private final float[] rotationMatrix = new float[9];
+    private final float[] orientationAngles = new float[3];
+    private final float[] lastAccel = new float[3];
+    private final float[] lastMag = new float[3];
+    private boolean hasAccel = false;
+    private boolean hasMag = false;
+
     private boolean debuggable;
     private boolean readerAvailable;
     private boolean readerReading;
@@ -89,7 +106,16 @@ public class MainActivity extends AppCompatActivity implements UhfReader.Listene
         urlField = findViewById(R.id.dashboard_url);
 
         reader = new UhfReader(this, this);
-        bridge = new DashboardBridge(reader, versionName());
+        bridge = new DashboardBridge(this, reader, versionName());
+
+        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        if (sensorManager != null) {
+            rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+            if (rotationSensor == null) {
+                accelSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+                magSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+            }
+        }
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -102,6 +128,7 @@ public class MainActivity extends AppCompatActivity implements UhfReader.Listene
         web.setWebViewClient(new DashboardClient());
 
         testScan.setOnClickListener(v -> reader.toggleReading());
+        findViewById(R.id.btn_launch_radar).setOnClickListener(v -> showNativeSearchDialog());
         findViewById(R.id.btn_save).setOnClickListener(v -> saveUrlAndLoad());
         findViewById(R.id.btn_close).setOnClickListener(v -> closeSetup());
 
@@ -134,10 +161,21 @@ public class MainActivity extends AppCompatActivity implements UhfReader.Listene
     protected void onResume() {
         super.onResume();
         reader.resume();
+        if (sensorManager != null) {
+            if (rotationSensor != null) {
+                sensorManager.registerListener(sensorListener, rotationSensor, SensorManager.SENSOR_DELAY_UI);
+            } else {
+                if (accelSensor != null) sensorManager.registerListener(sensorListener, accelSensor, SensorManager.SENSOR_DELAY_UI);
+                if (magSensor != null) sensorManager.registerListener(sensorListener, magSensor, SensorManager.SENSOR_DELAY_UI);
+            }
+        }
     }
 
     @Override
     protected void onPause() {
+        if (sensorManager != null) {
+            sensorManager.unregisterListener(sensorListener);
+        }
         reader.pause();
         super.onPause();
     }
@@ -150,16 +188,73 @@ public class MainActivity extends AppCompatActivity implements UhfReader.Listene
         super.onDestroy();
     }
 
+    // ---- compass / orientation sensor ----
+
+    private long lastHeadingDispatch = 0;
+    private float lastDispatchedHeading = -999f;
+
+    private final SensorEventListener sensorListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            if (event.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
+                SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values);
+                SensorManager.getOrientation(rotationMatrix, orientationAngles);
+                float deg = (float) Math.toDegrees(orientationAngles[0]);
+                if (deg < 0) deg += 360f;
+                currentHeading = Math.round(deg * 10f) / 10f;
+                notifyHeadingChanged();
+            } else if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+                System.arraycopy(event.values, 0, lastAccel, 0, 3);
+                hasAccel = true;
+                updateHeadingFromAccelMag();
+            } else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+                System.arraycopy(event.values, 0, lastMag, 0, 3);
+                hasMag = true;
+                updateHeadingFromAccelMag();
+            }
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+    };
+
+    private void updateHeadingFromAccelMag() {
+        if (rotationSensor != null) return;
+        if (hasAccel && hasMag) {
+            if (SensorManager.getRotationMatrix(rotationMatrix, null, lastAccel, lastMag)) {
+                SensorManager.getOrientation(rotationMatrix, orientationAngles);
+                float deg = (float) Math.toDegrees(orientationAngles[0]);
+                if (deg < 0) deg += 360f;
+                currentHeading = Math.round(deg * 10f) / 10f;
+                notifyHeadingChanged();
+            }
+        }
+    }
+
+    private void notifyHeadingChanged() {
+        if (bridge != null) {
+            bridge.setHeading(currentHeading);
+        }
+        long now = System.currentTimeMillis();
+        // Dispatch to WebView if rotated >= 1.0 deg or every 50ms for smooth live tracking
+        if (pageReady && (now - lastHeadingDispatch >= 50 || Math.abs(currentHeading - lastDispatchedHeading) >= 1.0f)) {
+            lastHeadingDispatch = now;
+            lastDispatchedHeading = currentHeading;
+            DashboardBridge.sendHeading(web, currentHeading);
+        }
+    }
+
     // ---- reader events (main thread) ----
 
     @Override
     public void onTags(List<UhfReader.Tag> tags) {
         if (pageReady) {
-            DashboardBridge.sendTags(web, tags);
+            DashboardBridge.sendTags(web, tags, currentHeading, reader.getPower());
         }
         if (debuggable) {
             for (UhfReader.Tag t : tags) {
-                Log.d(TAG, "tag epc=" + t.epc + " rssi=" + t.rssi + " count=" + t.count);
+                Log.d(TAG, "tag epc=" + t.epc + " rssi=" + t.rssi + " count=" + t.count
+                        + " heading=" + currentHeading + " power=" + reader.getPower());
             }
         }
         if (setupPanel.getVisibility() == View.VISIBLE) {
@@ -167,6 +262,7 @@ public class MainActivity extends AppCompatActivity implements UhfReader.Listene
             for (UhfReader.Tag t : tags) {
                 sb.append(String.format(Locale.US, "%s\n  rssi %d   count %d\n", t.epc, t.rssi, t.count));
             }
+            sb.append(String.format(Locale.US, "\nCompass: %.1f° | Power: %d dBm\n", currentHeading, reader.getPower()));
             tagList.setText(sb.length() == 0 ? getString(R.string.no_tags_yet) : sb.toString());
         }
     }
@@ -286,5 +382,81 @@ public class MainActivity extends AppCompatActivity implements UhfReader.Listene
                 renderStatus();
             }
         }
+    }
+
+    private void showNativeSearchDialog() {
+        final EditText input = new EditText(this);
+        input.setHint("Enter File ID or Case (e.g. 001)");
+        input.setText("001");
+        input.setSelectAllOnFocus(true);
+        input.setTextColor(android.graphics.Color.BLACK);
+
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Native Radar File Locator")
+                .setMessage("Enter the File ID or Case Number to track with 60 FPS hardware radar:")
+                .setView(input)
+                .setPositiveButton("Start Radar", (dialog, which) -> {
+                    String query = input.getText().toString().trim();
+                    if (!query.isEmpty()) {
+                        lookupAndLaunchRadar(query);
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void lookupAndLaunchRadar(String query) {
+        String urlStr = savedUrl();
+        String host = Uri.parse(urlStr).getHost();
+        if (host == null || host.isEmpty()) host = "172.20.10.4";
+        final String apiEndpoint = "http://" + host + ":4000/api/files?search=" + Uri.encode(query);
+
+        new Thread(() -> {
+            String fileId = query;
+            String fileName = "File " + query;
+            String caseId = "—";
+            String rfidTag = "";
+            String storageLocation = "Shelf Room";
+
+            try {
+                java.net.URL url = new java.net.URL(apiEndpoint);
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(2000);
+                conn.setReadTimeout(2000);
+                if (conn.getResponseCode() == 200) {
+                    java.io.InputStream in = conn.getInputStream();
+                    java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(in));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) sb.append(line);
+                    org.json.JSONObject obj = new org.json.JSONObject(sb.toString());
+                    org.json.JSONArray items = obj.optJSONArray("items");
+                    if (items != null && items.length() > 0) {
+                        org.json.JSONObject first = items.getJSONObject(0);
+                        fileId = first.optString("fileId", fileId);
+                        fileName = first.optString("fileName", fileName);
+                        caseId = first.optString("caseId", caseId);
+                        rfidTag = first.optString("rfidTag", "");
+                        storageLocation = first.optString("storageLocation", storageLocation);
+                    }
+                }
+            } catch (Throwable ignored) {}
+
+            final String fId = fileId;
+            final String fName = fileName;
+            final String cId = caseId;
+            final String rTag = rfidTag;
+            final String sLoc = storageLocation;
+
+            runOnUiThread(() -> {
+                android.content.Intent intent = new android.content.Intent(MainActivity.this, RadarActivity.class);
+                intent.putExtra("fileId", fId);
+                intent.putExtra("fileName", fName);
+                intent.putExtra("caseId", cId);
+                intent.putExtra("rfidTag", rTag);
+                intent.putExtra("storageLocation", sLoc);
+                startActivity(intent);
+            });
+        }).start();
     }
 }

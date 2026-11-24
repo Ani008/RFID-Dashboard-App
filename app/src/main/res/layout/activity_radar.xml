@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0F172A"
+    android:padding="16dp">
+
+    <!-- Top Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <Button
+            android:id="@+id/btn_back"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="← Back"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#334155" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Native File Locator"
+            android:textColor="#F8FAFC"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:gravity="center" />
+
+        <Button
+            android:id="@+id/btn_mute"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="🔊 Audio"
+            android:textSize="13sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#334155" />
+    </LinearLayout>
+
+    <!-- File Target Details Card -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#1E293B"
+        android:padding="14dp"
+        android:layout_marginTop="12dp"
+        android:elevation="4dp">
+
+        <TextView
+            android:id="@+id/tv_file_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Case File"
+            android:textColor="#F8FAFC"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp">
+
+            <TextView
+                android:id="@+id/tv_file_id"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="File ID: 001"
+                android:textColor="#94A3B8"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/tv_case_id"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Case: CASE-002"
+                android:textColor="#94A3B8"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_storage_location"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Location: Shelf Room"
+            android:textColor="#38BDF8"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Direction Guidance Pill -->
+    <TextView
+        android:id="@+id/tv_guidance"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:padding="10dp"
+        android:gravity="center"
+        android:background="#334155"
+        android:textColor="#FFFFFF"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:text="HOLD TRIGGER &amp; SWEEP AROUND ROOM" />
+
+    <!-- 60 FPS GPU-Accelerated Radar View -->
+    <com.example.rfid.RadarView
+        android:id="@+id/radar_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Signal Bar & Readout -->
+    <ProgressBar
+        android:id="@+id/pb_signal"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="14dp"
+        android:max="100"
+        android:progress="0"
+        android:progressTint="#22C55E"
+        android:backgroundTint="#334155" />
+
+    <TextView
+        android:id="@+id/tv_signal_readout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:text="Ready · Pull trigger to scan"
+        android:textColor="#94A3B8"
+        android:textSize="14sp"
+        android:fontFamily="monospace" />
+
+</LinearLayout>
