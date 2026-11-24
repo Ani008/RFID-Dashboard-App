@@ -1,5 +1,7 @@
 package com.example.rfid;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -8,15 +10,25 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.SystemClock;
+import android.text.InputType;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -50,6 +62,15 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
     private TextView tvDebug;
     private boolean debugVisible = false;
 
+    // ---- readings log (REC button) ----
+    private static final long REC_WINDOW_MS = 3000;   // a record uses the last 3 seconds of reads
+    private static final int REC_MIN_SAMPLES = 5;
+    private static final String KEY_LOG = "reading_log";
+    private static final String KEY_LAST_DIST = "log_last_dist";
+    private static final String KEY_LAST_NOTE = "log_last_note";
+    private final ArrayList<long[]> recSamples = new ArrayList<>(); // {time ms, window max, raw rssi}
+    private TextView btnLog;
+
     /** Transmit power used on the radar screen (dBm). Lower = more accurate direction. */
     private static final String PREFS = "rfid";
     private static final String KEY_RADAR_POWER = "radar_power_dbm";
@@ -69,14 +90,33 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
     // changed by FRESH reads; they never follow the reader's heading.
     private final TagBearingEstimator estimator = new TagBearingEstimator();
     private float targetBearing = 0f;   // estimated bearing of the tag (fixed in the room)
-    private float peakStrength = 0f;    // 0..1 from the strongest signal seen: places the dot
+    private float radarProximity = 0f;  // 0 = outer ring .. 1 = at the reader: places the dot
     private float liveStrength = 0f;    // 0..1 right now: drives the signal bar and the sound
     private int lastTargetCount = -1;   // SDK read counter of the target at the previous poll
     private boolean triggerHeld = false;
     private boolean hasSeenTarget = false;
     private int totalTargetReads = 0;
     private int lastRssi = -999;
-    private float estDistanceMeters = -1f;
+    private float distanceCm = -1f;        // estimated reader-to-tag distance, -1 = unknown
+
+    // Distance: estimated from the signal of the most recent reads (see DistanceEstimator).
+    private final DistanceEstimator distance = new DistanceEstimator();
+    private int currentPowerDbm = DEFAULT_POWER_DBM;
+    private static final float PINPOINT_CM = 15f;
+
+    // Used when no calibration exists for the current power. The reference is a rough value at
+    // 30 dBm; the signal is assumed to move 1:1 with transmit power. Calibrate for real numbers.
+    private static final double DEFAULT_REF_CM = 15.0;
+    private static final double DEFAULT_REF_RSSI_AT_30DBM = -17.0;
+    private static final double DEFAULT_SLOPE = 40.0; // dB per decade of distance
+
+    // Two-point calibration
+    private static final int CAL_NEAR_CM = 20;
+    private static final int CAL_FAR_CM = 100;
+    private static final int CAL_MIN_SAMPLES = 30;
+    private boolean calCapturing = false;
+    private int calSession = 0;
+    private final ArrayList<Integer> calSamples = new ArrayList<>();
 
     private final float[] rotationMatrix = new float[9];
     private final float[] orientationAngles = new float[3];
@@ -137,13 +177,17 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
         int savedPower = prefs.getInt(KEY_RADAR_POWER, DEFAULT_POWER_DBM);
         savedPower = Math.max(MIN_POWER_DBM, Math.min(30, savedPower));
         sbPower.setProgress(savedPower - MIN_POWER_DBM);
-        tvPower.setText("Reader power: " + savedPower + " dBm");
+        currentPowerDbm = savedPower;
+        loadCalibration(savedPower);
+        updatePowerLabel();
         reader.setPowerLevel(savedPower);
         sbPower.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
                 int dbm = progress + MIN_POWER_DBM;
-                tvPower.setText("Reader power: " + dbm + " dBm");
+                currentPowerDbm = dbm;
+                loadCalibration(dbm);
+                updatePowerLabel();
                 if (fromUser) {
                     reader.setPowerLevel(dbm);
                     prefs.edit().putInt(KEY_RADAR_POWER, dbm).apply();
@@ -157,12 +201,26 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
             public void onStopTrackingTouch(SeekBar bar) {}
         });
 
-        // Tap the title to show or hide the diagnostic line.
-        findViewById(R.id.tv_title).setOnClickListener(v -> {
+        findViewById(R.id.btn_calibrate).setOnClickListener(v -> startCalibration());
+
+        // Tap the title OR the file name to show or hide the diagnostic panel (on the radar).
+        View.OnClickListener toggleDebug = v -> {
             debugVisible = !debugVisible;
             tvDebug.setVisibility(debugVisible ? View.VISIBLE : View.GONE);
             renderUI();
+        };
+        findViewById(R.id.tv_title).setOnClickListener(toggleDebug);
+        tvFileTitle.setOnClickListener(toggleDebug);
+
+        // REC = save one reading (median of the last 3 s). LOG = see / copy all saved readings.
+        btnLog = findViewById(R.id.btn_log);
+        findViewById(R.id.btn_rec).setOnClickListener(v -> onRecordTapped());
+        btnLog.setOnClickListener(v -> showLogDialog());
+        btnLog.setOnLongClickListener(v -> {
+            confirmClearLog();
+            return true;
         });
+        updateLogButton();
 
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
@@ -234,15 +292,19 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
             estimator.addRead(currentHeading, target.rssi, newReads);
             targetBearing = estimator.bearing();
 
-            // Scale RSSI: -58 dBm = 0%, -8 dBm = 100%
+            // Scale RSSI: -58 dBm = 0%, -8 dBm = 100%  (signal bar and sound only)
             float rawNow = clamp01((target.rssi + 58f) / 50f, 0.06f);
-            float rawPeak = clamp01((estimator.bestRssi() + 58f) / 50f, 0.06f);
             liveStrength += (rawNow - liveStrength) * 0.6f;
-            peakStrength = rawPeak;
 
-            // Log-distance estimate from the PEAK signal, so it does not jitter with aim.
-            estDistanceMeters = (float) Math.pow(10.0, (-8.0 - estimator.bestRssi()) / 22.0);
-            estDistanceMeters = Math.max(0.1f, Math.min(8.0f, Math.round(estDistanceMeters * 10f) / 10f));
+            // Distance follows the signal of the last few fresh reads, so the dot moves toward the
+            // reader as you move closer and away as you back off. Stale polls never reach here.
+            distance.addRead(target.rssi);
+            updateDistanceFromEstimator();
+            if (calCapturing) calSamples.add(distance.strongestRecent());
+
+            long nowMs = SystemClock.elapsedRealtime();
+            recSamples.add(new long[]{nowMs, distance.strongestRecent(), target.rssi});
+            while (!recSamples.isEmpty() && nowMs - recSamples.get(0)[0] > 10000) recSamples.remove(0);
         } else {
             // No new read: the tag is out of the beam right now. Fade the live signal only.
             liveStrength *= 0.9f;
@@ -251,6 +313,268 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
 
         soundLocator.setStrength(liveStrength);
         renderUI();
+    }
+
+    // ---- distance ----
+
+    private void updateDistanceFromEstimator() {
+        if (!distance.hasEstimate()) return;
+        distanceCm = (float) distance.distanceCm();
+        float f = (float) Math.sqrt(Math.min(1.0, distanceCm / RadarView.RANGE_CM));
+        radarProximity = 1f - f;
+    }
+
+    private static String formatDistance(float cm) {
+        if (cm < 100f) return String.format(Locale.US, "%d cm", Math.round(cm));
+        return String.format(Locale.US, "%.1f m", cm / 100f);
+    }
+
+    private SharedPreferences appPrefs() {
+        return getSharedPreferences(PREFS, MODE_PRIVATE);
+    }
+
+    private static String calKey(int dbm, String field) {
+        return "cal_" + dbm + "_" + field;
+    }
+
+    /** Uses the saved calibration for this power setting, or the rough default if there is none. */
+    private void loadCalibration(int dbm) {
+        SharedPreferences p = appPrefs();
+        if (p.contains(calKey(dbm, "slope"))) {
+            distance.configure(
+                    p.getFloat(calKey(dbm, "ref_cm"), (float) DEFAULT_REF_CM),
+                    p.getFloat(calKey(dbm, "ref_rssi"), (float) DEFAULT_REF_RSSI_AT_30DBM),
+                    p.getFloat(calKey(dbm, "slope"), (float) DEFAULT_SLOPE),
+                    true);
+        } else {
+            distance.configure(DEFAULT_REF_CM, DEFAULT_REF_RSSI_AT_30DBM + (dbm - 30),
+                    DEFAULT_SLOPE, false);
+        }
+        updateDistanceFromEstimator();
+    }
+
+    private void updatePowerLabel() {
+        tvPower.setText("Reader power: " + currentPowerDbm + " dBm  |  distance: "
+                + (distance.isCalibrated() ? "calibrated" : "not calibrated"));
+    }
+
+    // ---- two-point distance calibration ----
+
+    private void startCalibration() {
+        if (targetEpc.isEmpty()) {
+            Toast.makeText(this, "This file has no RFID tag registered.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        calibrationStep(1, CAL_NEAR_CM, 0);
+    }
+
+    private void calibrationStep(final int step, final int atCm, final int nearRssi) {
+        final int session = ++calSession;
+        calSamples.clear();
+        distance.resetWindow();
+        calCapturing = true;
+
+        MaterialAlertDialogBuilder b = new MaterialAlertDialogBuilder(this)
+                .setTitle("Calibrate distance (step " + step + " of 2)")
+                .setMessage("Place the reader " + atCm + " cm from the tag and aim it straight at the tag."
+                        + "\n\nHold the trigger for about 3 seconds, then tap Save."
+                        + "\n\nPower: " + currentPowerDbm + " dBm. Calibration is stored for this power setting.")
+                .setPositiveButton("Save", null)
+                .setNegativeButton("Cancel", null);
+        if (step == 1) {
+            b.setNeutralButton("Use default", (d, w) -> {
+                SharedPreferences.Editor e = appPrefs().edit();
+                e.remove(calKey(currentPowerDbm, "ref_cm"));
+                e.remove(calKey(currentPowerDbm, "ref_rssi"));
+                e.remove(calKey(currentPowerDbm, "slope"));
+                e.apply();
+                loadCalibration(currentPowerDbm);
+                updatePowerLabel();
+                Toast.makeText(this, "Distance calibration cleared.", Toast.LENGTH_SHORT).show();
+            });
+        }
+        final androidx.appcompat.app.AlertDialog dialog = b.create();
+        dialog.setOnDismissListener(d -> {
+            // Dismissal is delivered late, so only the dialog of the CURRENT step may stop capturing.
+            if (calSession == session) calCapturing = false;
+        });
+        dialog.show();
+
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            if (calSamples.size() < CAL_MIN_SAMPLES) {
+                Toast.makeText(this, "Not enough reads yet. Aim at the tag and hold the trigger a few seconds, then tap Save.",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+            ArrayList<Integer> sorted = new ArrayList<>(calSamples);
+            Collections.sort(sorted);
+            int captured = sorted.get(sorted.size() / 2); // median of the same signal used at run time
+            dialog.dismiss();
+            Toast.makeText(this, "Step " + step + ": captured signal " + captured + " at " + atCm
+                    + " cm (" + sorted.size() + " reads)", Toast.LENGTH_LONG).show();
+            appendLog("CAL step " + step + ": " + atCm + " cm -> window max " + captured
+                    + " (" + sorted.size() + " reads, " + currentPowerDbm + " dBm)");
+            if (step == 1) {
+                calibrationStep(2, CAL_FAR_CM, captured);
+            } else {
+                finishCalibration(nearRssi, captured);
+            }
+        });
+    }
+
+    private void finishCalibration(int nearRssi, int farRssi) {
+        double[] fit = DistanceEstimator.fit(CAL_NEAR_CM, nearRssi, CAL_FAR_CM, farRssi);
+        if (fit == null) {
+            Toast.makeText(this, "Calibration failed: the signal was not clearly weaker at "
+                    + CAL_FAR_CM + " cm than at " + CAL_NEAR_CM
+                    + " cm. Aim straight at the tag at both distances and try again.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        appPrefs().edit()
+                .putFloat(calKey(currentPowerDbm, "ref_cm"), (float) fit[0])
+                .putFloat(calKey(currentPowerDbm, "ref_rssi"), (float) fit[1])
+                .putFloat(calKey(currentPowerDbm, "slope"), (float) fit[2])
+                .apply();
+        loadCalibration(currentPowerDbm);
+        updatePowerLabel();
+        appendLog("CAL saved at " + currentPowerDbm + " dBm: " + distance.modelText());
+        Toast.makeText(this, "Distance calibrated for " + currentPowerDbm + " dBm. " + distance.modelText(),
+                Toast.LENGTH_LONG).show();
+    }
+
+
+    // ---- readings log ----
+
+    private String readLog() {
+        return appPrefs().getString(KEY_LOG, "");
+    }
+
+    private int logCount() {
+        String s = readLog();
+        return s.isEmpty() ? 0 : s.split("\n").length;
+    }
+
+    private void appendLog(String line) {
+        String s = readLog();
+        appPrefs().edit().putString(KEY_LOG, s.isEmpty() ? line : s + "\n" + line).apply();
+        updateLogButton();
+    }
+
+    private void updateLogButton() {
+        if (btnLog != null) btnLog.setText("LOG\n" + logCount());
+    }
+
+    /** Snapshot the last 3 s of reads, then ask for the real distance and an optional note. */
+    private void onRecordTapped() {
+        if (targetEpc.isEmpty()) {
+            Toast.makeText(this, "This file has no RFID tag registered.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        long now = SystemClock.elapsedRealtime();
+        ArrayList<Integer> wm = new ArrayList<>();
+        ArrayList<Integer> raw = new ArrayList<>();
+        for (long[] s : recSamples) {
+            if (now - s[0] <= REC_WINDOW_MS) {
+                wm.add((int) s[1]);
+                raw.add((int) s[2]);
+            }
+        }
+        if (wm.size() < REC_MIN_SAMPLES) {
+            Toast.makeText(this, "Only " + wm.size() + " reads in the last 3 s. Aim at the tag, hold the trigger, "
+                    + "and tap REC while it is still reading.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Collections.sort(wm);
+        Collections.sort(raw);
+        final int n = wm.size();
+        final int medWm = wm.get(n / 2);
+        final int minWm = wm.get(0);
+        final int maxWm = wm.get(n - 1);
+        final int medRaw = raw.get(n / 2);
+        final int estCm = (int) Math.round(distance.distanceForRssi(medWm));
+        final int power = currentPowerDbm;
+        final String model = distance.isCalibrated() ? "cal" : "default";
+
+        final EditText etDist = new EditText(this);
+        etDist.setHint("Real distance in cm (measure it)");
+        etDist.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        etDist.setText(appPrefs().getString(KEY_LAST_DIST, ""));
+        etDist.selectAll();
+
+        final EditText etNote = new EditText(this);
+        etNote.setHint("Note (e.g. on rack, metal shelf, open table)");
+        etNote.setInputType(InputType.TYPE_CLASS_TEXT);
+        etNote.setText(appPrefs().getString(KEY_LAST_NOTE, ""));
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (20 * getResources().getDisplayMetrics().density);
+        box.setPadding(pad, pad / 2, pad, 0);
+        box.addView(etDist);
+        box.addView(etNote);
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Save reading")
+                .setMessage("window max " + medWm + "  (range " + minWm + " to " + maxWm + ")\n"
+                        + "raw " + medRaw + "   app says ~" + estCm + " cm\n"
+                        + n + " reads, " + power + " dBm")
+                .setView(box)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save", (d, w) -> {
+                    String dist = etDist.getText().toString().trim();
+                    String note = etNote.getText().toString().trim();
+                    if (dist.isEmpty()) dist = "?";
+                    appPrefs().edit().putString(KEY_LAST_DIST, dist).putString(KEY_LAST_NOTE, note).apply();
+                    appendLog(String.format(Locale.US,
+                            "#%d  real %s cm | wmax %d [%d..%d] | raw %d | app %d cm | n=%d | %d dBm %s%s",
+                            logCount() + 1, dist, medWm, minWm, maxWm, medRaw, estCm, n, power, model,
+                            note.isEmpty() ? "" : " | " + note));
+                    Toast.makeText(this, "Saved reading #" + logCount(), Toast.LENGTH_SHORT).show();
+                })
+                .show();
+    }
+
+    private void showLogDialog() {
+        String text = readLog();
+        final TextView tv = new TextView(this);
+        tv.setText(text.isEmpty()
+                ? "No readings yet.\n\nHold the trigger aimed at the tag, then tap the red REC circle."
+                : text);
+        tv.setTextIsSelectable(true);
+        tv.setTypeface(android.graphics.Typeface.MONOSPACE);
+        tv.setTextSize(12f);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        tv.setPadding(pad, pad, pad, pad);
+        ScrollView sv = new ScrollView(this);
+        sv.addView(tv);
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Saved readings (" + logCount() + ")")
+                .setView(sv)
+                .setPositiveButton("Copy all", (d, w) -> {
+                    ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("RFID readings", readLog()));
+                    Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
+                })
+                .setNeutralButton("Delete last", (d, w) -> {
+                    String s = readLog();
+                    int i = s.lastIndexOf('\n');
+                    appPrefs().edit().putString(KEY_LOG, i < 0 ? "" : s.substring(0, i)).apply();
+                    updateLogButton();
+                })
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
+    private void confirmClearLog() {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Clear all saved readings?")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Clear", (d, w) -> {
+                    appPrefs().edit().remove(KEY_LOG).apply();
+                    updateLogButton();
+                })
+                .show();
     }
 
     private static float clamp01(float v, float min) {
@@ -306,7 +630,7 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
         if (diff < -180f) diff += 360f;
 
         boolean inBeam = Math.abs(diff) <= 28f;
-        boolean isPinpoint = inBeam && peakStrength >= 0.82f;
+        boolean isPinpoint = inBeam && distanceCm > 0f && distanceCm <= PINPOINT_CM;
 
         if (!hasSeenTarget) {
             tvGuidance.setText(triggerHeld
@@ -317,7 +641,7 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
             tvGuidance.setText("EXACT FILE - PINPOINT (under 15 cm)");
             tvGuidance.setBackgroundColor(Color.parseColor("#059669"));
         } else if (inBeam) {
-            String distText = estDistanceMeters > 0 ? String.format(Locale.US, " (~%.1fm)", estDistanceMeters) : "";
+            String distText = distanceCm > 0 ? " (~" + formatDistance(distanceCm) + ")" : "";
             tvGuidance.setText("DIRECT AIM - IN BEAM RANGE" + distText);
             tvGuidance.setBackgroundColor(Color.parseColor("#16A34A"));
         } else if (diff < -28f && diff >= -120f) {
@@ -335,19 +659,20 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
         pbSignal.setProgress(pct);
 
         if (hasSeenTarget) {
-            tvSignalReadout.setText(String.format(Locale.US, "%d%% Signal  |  %d dBm  |  ~%.1fm  |  %d reads",
-                    pct, lastRssi, estDistanceMeters, totalTargetReads));
+            tvSignalReadout.setText(String.format(Locale.US, "%d%% Signal  |  %d dBm  |  ~%s  |  %d reads",
+                    pct, lastRssi, distanceCm > 0 ? formatDistance(distanceCm) : "--", totalTargetReads));
         }
 
         if (debugVisible) {
             tvDebug.setText(String.format(Locale.US,
-                    "heading %.0f | tag bearing %.0f | diff %.0f%nlast rssi %d | best rssi %.1f | reads %d%npower %d dBm | trigger %s",
+                    "heading %.0f | tag bearing %.0f | diff %.0f%nlast rssi %d | window max %d | reads %d%npower %d dBm | trigger %s%ndistance %.0f cm | model %s%n%s",
                     currentHeading, targetBearing, diff, lastRssi,
-                    estimator.hasEstimate() ? estimator.bestRssi() : 0f, totalTargetReads,
-                    reader.getPower(), triggerHeld ? "held" : "released"));
+                    distance.hasEstimate() ? distance.strongestRecent() : 0, totalTargetReads,
+                    reader.getPower(), triggerHeld ? "held" : "released",
+                    distanceCm, distance.isCalibrated() ? "calibrated" : "default", distance.modelText()));
         }
 
-        radarView.update(peakStrength, currentHeading, targetBearing, inBeam, isPinpoint, hasSeenTarget);
+        radarView.update(radarProximity, currentHeading, targetBearing, inBeam, isPinpoint, hasSeenTarget);
     }
 
     /**

@@ -28,6 +28,17 @@ public class RadarView extends View {
     private final Paint centerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint arrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
+    /**
+     * Distance, in cm, shown at the outer ring. The dot's radius is its distance on a square-root
+     * scale (so centimetres close to the reader are easy to see). Ring positions use the same
+     * scale, so a ring labelled "50 cm" really is 50 cm.
+     */
+    public static final float RANGE_CM = 300f;
+    private static final float[] RING_CM = {25f, 50f, 100f, 200f, RANGE_CM};
+    private static final String[] RING_LABEL = buildRingLabels();
+
+    private final Paint ringLabelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
     private final Path beamPath = new Path();
     private final Path arrowPath = new Path();
 
@@ -56,7 +67,27 @@ public class RadarView extends View {
         init();
     }
 
+    private static String[] buildRingLabels() {
+        String[] out = new String[RING_CM.length];
+        for (int i = 0; i < RING_CM.length; i++) {
+            float cm = RING_CM[i];
+            out[i] = cm < 100f
+                    ? String.format(java.util.Locale.US, "%d cm", Math.round(cm))
+                    : String.format(java.util.Locale.US, "%s m", trimMeters(cm / 100f));
+        }
+        return out;
+    }
+
+    private static String trimMeters(float m) {
+        return m == Math.round(m) ? String.valueOf(Math.round(m)) : String.format(java.util.Locale.US, "%.1f", m);
+    }
+
     private void init() {
+        ringLabelPaint.setColor(Color.parseColor("#86EFAC"));
+        ringLabelPaint.setAlpha(170);
+        ringLabelPaint.setTextSize(22f);
+        ringLabelPaint.setTextAlign(Paint.Align.CENTER);
+
         ringPaint.setStyle(Paint.Style.STROKE);
         ringPaint.setColor(Color.parseColor("#2F7A4C"));
         ringPaint.setStrokeWidth(2f);
@@ -122,11 +153,14 @@ public class RadarView extends View {
         bgPaint.setShader(bgGrad);
         canvas.drawCircle(cx, cy, rMax + 20f, bgPaint);
 
-        // Concentric distance rings
-        canvas.drawCircle(cx, cy, rMax * 0.25f, ringPaint);
-        canvas.drawCircle(cx, cy, rMax * 0.50f, ringPaint);
-        canvas.drawCircle(cx, cy, rMax * 0.75f, ringPaint);
-        canvas.drawCircle(cx, cy, rMax, ringPaint);
+        // Concentric distance rings at real distances, same scale as the tag dot below
+        float sin45 = (float) Math.sin(Math.PI / 4.0);
+        for (int i = 0; i < RING_CM.length; i++) {
+            float f = (float) Math.sqrt(RING_CM[i] / RANGE_CM);
+            float ringR = rMin + f * (rMax - rMin);
+            canvas.drawCircle(cx, cy, ringR, ringPaint);
+            canvas.drawText(RING_LABEL[i], cx + ringR * sin45, cy - ringR * sin45 + 8f, ringLabelPaint);
+        }
 
         // Crosshairs
         canvas.drawLine(cx - rMax, cy, cx + rMax, cy, axisPaint);
