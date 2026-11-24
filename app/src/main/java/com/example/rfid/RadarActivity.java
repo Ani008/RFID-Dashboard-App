@@ -348,7 +348,14 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
     @Override
     public void onState(boolean available, boolean reading, String message) {
         if (targetEpc.isEmpty()) return;
+        boolean wasHeld = triggerHeld;
         triggerHeld = reading;
+        if (reading && !wasHeld) {
+            // New trigger press: forget the reads from the last press (you have probably moved
+            // since), so the dot, beeps and vibration follow where the reader is NOW.
+            distance.resetWindow();
+            lastTargetCount = -1;
+        }
         if (!reading) {
             // Trigger released: stop the live signal and the sound. The dot and its bearing
             // are left exactly where they are, because the file has not moved.

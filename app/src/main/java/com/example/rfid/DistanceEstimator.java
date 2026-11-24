@@ -30,7 +30,16 @@ final class DistanceEstimator {
     static final double MIN_CM = 1.0;
     static final double MAX_CM = 1000.0;
 
+    /**
+     * A read older than this is ignored. Without it, when reads come slowly (far away, or the
+     * tag only just inside the beam) the last 12 reads can span many seconds, so one strong read
+     * from when you were close kept the distance "stuck" close after you moved back.
+     */
+    static final long MAX_AGE_MS = 1500;
+
     private final int[] recent = new int[WINDOW];
+    private final long[] recentAt = new long[WINDOW];
+    private long lastReadMs = 0;
     private int count = 0;
     private int next = 0;
 
@@ -80,9 +89,16 @@ final class DistanceEstimator {
 
     /** Feed one FRESH read. */
     void addRead(int rssi) {
+        addRead(rssi, System.nanoTime() / 1000000L);
+    }
+
+    /** Same, with an explicit clock (milliseconds), so the behaviour can be tested. */
+    void addRead(int rssi, long nowMs) {
         recent[next] = rssi;
+        recentAt[next] = nowMs;
         next = (next + 1) % WINDOW;
         if (count < WINDOW) count++;
+        lastReadMs = nowMs;
 
         double measuredLog = Math.log(distanceForRssi(strongestRecent()));
         if (Double.isNaN(smoothLog)) {
@@ -92,10 +108,11 @@ final class DistanceEstimator {
         }
     }
 
+    /** Strongest of the last WINDOW reads that are not older than MAX_AGE_MS (the newest always counts). */
     int strongestRecent() {
         int best = Integer.MIN_VALUE;
         for (int i = 0; i < count; i++) {
-            if (recent[i] > best) best = recent[i];
+            if (lastReadMs - recentAt[i] <= MAX_AGE_MS && recent[i] > best) best = recent[i];
         }
         return best;
     }
