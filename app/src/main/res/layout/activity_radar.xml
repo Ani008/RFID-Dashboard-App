@@ -125,45 +125,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <!-- REC circle: saves one reading. LOG: shows / copies the saved readings. -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top|end"
-            android:orientation="vertical"
-            android:gravity="center_horizontal">
-
-            <TextView
-                android:id="@+id/btn_rec"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:background="@drawable/bg_rec_circle"
-                android:gravity="center"
-                android:text="REC"
-                android:textColor="#FFFFFF"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:clickable="true"
-                android:focusable="true" />
-
-            <TextView
-                android:id="@+id/btn_log"
-                android:layout_width="56dp"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="@drawable/bg_log_pill"
-                android:gravity="center"
-                android:paddingTop="6dp"
-                android:paddingBottom="6dp"
-                android:text="LOG\n0"
-                android:textColor="#F8FAFC"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:clickable="true"
-                android:focusable="true" />
-        </LinearLayout>
-
-        <!-- Diagnostics: tap the title or the file name to show or hide -->
+        <!-- Hidden diagnostics: tap the title or the file name to show or hide -->
         <TextView
             android:id="@+id/tv_debug"
             android:layout_width="wrap_content"
@@ -225,14 +187,5 @@
         android:text="Lower power: more accurate direction. Higher power: longer range."
         android:textColor="#94A3B8"
         android:textSize="12sp" />
-
-    <Button
-        android:id="@+id/btn_calibrate"
-        style="@style/Widget.Material3.Button.TextButton"
-        android:layout_width="wrap_content"
-        android:layout_height="40dp"
-        android:text="Calibrate distance"
-        android:textColor="#38BDF8"
-        android:textSize="13sp" />
 
 </LinearLayout>

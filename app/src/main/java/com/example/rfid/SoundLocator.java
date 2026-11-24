@@ -26,7 +26,8 @@ public final class SoundLocator {
 
     private volatile boolean running = false;
     private volatile boolean muted = false;
-    private volatile float strength = 0f; // 0.0 .. 1.0
+    private volatile float strength = 0f; // 0.0 .. 1.0 (beep speed)
+    private volatile boolean vibrate = false; // buzz together with the beeps
 
     public SoundLocator(Context context) {
         this.context = context.getApplicationContext();
@@ -62,6 +63,10 @@ public final class SoundLocator {
         this.strength = Math.max(0f, Math.min(1f, s));
     }
 
+    public void setVibrate(boolean v) {
+        this.vibrate = v;
+    }
+
     public void setMuted(boolean m) {
         this.muted = m;
     }
@@ -89,49 +94,29 @@ public final class SoundLocator {
             float s = strength;
 
             if (!muted && s > 0.04f && toneGen != null) {
-                if (s >= 0.82f) {
-                    // ==========================================
-                    // PINPOINT ZONE: 0 to 15 cm
-                    // Ultra-fast machine-gun rapid frenzy (15-25 beeps/sec)
-                    // ==========================================
-                    float p = Math.min(1f, Math.max(0f, (s - 0.82f) / 0.18f));
-                    nextDelayMs = (long) (70 - p * 35); // 70ms down to 35ms
-                    int durMs = (int) (24 - p * 6);     // 24ms down to 18ms
-
-                    try {
-                        toneGen.startTone(ToneGenerator.TONE_PROP_BEEP2, durMs);
-                    } catch (Throwable ignored) {}
-
-                    // Haptic pulse when right on top (<15cm)
-                    if (vibrator != null && vibrator.hasVibrator()) {
-                        try {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                vibrator.vibrate(VibrationEffect.createOneShot(18, VibrationEffect.DEFAULT_AMPLITUDE));
-                            } else {
-                                vibrator.vibrate(18);
-                            }
-                        } catch (Throwable ignored) {}
-                    }
-                } else if (s >= 0.60f) {
-                    // Very close: 15cm - 40cm
-                    float p = (s - 0.60f) / 0.22f;
-                    nextDelayMs = (long) (210 - p * 135); // 210ms down to 75ms
-                    try {
+                // One smooth curve, no steps: s = 1 (15 cm or closer) beeps about every 45 ms;
+                // s near 0 (far) about every 900 ms; in between it speeds up gradually.
+                nextDelayMs = (long) (45 + 850 * Math.pow(1.0 - s, 1.6));
+                try {
+                    if (s >= 0.9f) {
+                        toneGen.startTone(ToneGenerator.TONE_PROP_BEEP2, 20);
+                    } else if (s >= 0.5f) {
                         toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 30);
-                    } catch (Throwable ignored) {}
-                } else if (s >= 0.30f) {
-                    // Mid range: 40cm - 1.5m
-                    float p = (s - 0.30f) / 0.30f;
-                    nextDelayMs = (long) (520 - p * 310); // 520ms down to 210ms
-                    try {
+                    } else if (s >= 0.3f) {
                         toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 40);
-                    } catch (Throwable ignored) {}
-                } else {
-                    // Far: > 1.5m
-                    float p = Math.max(0f, s / 0.30f);
-                    nextDelayMs = (long) (880 - p * 360); // 880ms down to 520ms
-                    try {
+                    } else {
                         toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 45);
+                    }
+                } catch (Throwable ignored) {}
+
+                // Second confirmation: buzz together with the beep when you are on top of the file.
+                if (vibrate && vibrator != null && vibrator.hasVibrator()) {
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            vibrator.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE));
+                        } else {
+                            vibrator.vibrate(30);
+                        }
                     } catch (Throwable ignored) {}
                 }
             }

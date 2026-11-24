@@ -159,7 +159,6 @@ public class RadarView extends View {
             float f = (float) Math.sqrt(RING_CM[i] / RANGE_CM);
             float ringR = rMin + f * (rMax - rMin);
             canvas.drawCircle(cx, cy, ringR, ringPaint);
-            canvas.drawText(RING_LABEL[i], cx + ringR * sin45, cy - ringR * sin45 + 8f, ringLabelPaint);
         }
 
         // Crosshairs
