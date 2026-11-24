@@ -1,0 +1,239 @@
+--- a/app/src/main/java/com/example/rfid/RadarActivity.java
++++ b/app/src/main/java/com/example/rfid/RadarActivity.java
+@@ -46,8 +46,15 @@
+     private Button btnMute;
+ 
+     private float currentHeading = 0f;
+-    private float targetBearing = 0f;
+-    private float smoothStrength = 0f;
++
++    // The tag is stationary. Its bearing and peak strength come from the estimator and are only
++    // changed by FRESH reads; they never follow the reader's heading.
++    private final TagBearingEstimator estimator = new TagBearingEstimator();
++    private float targetBearing = 0f;   // estimated bearing of the tag (fixed in the room)
++    private float peakStrength = 0f;    // 0..1 from the strongest signal seen: places the dot
++    private float liveStrength = 0f;    // 0..1 right now: drives the signal bar and the sound
++    private int lastTargetCount = -1;   // SDK read counter of the target at the previous poll
++    private boolean triggerHeld = false;
+     private boolean hasSeenTarget = false;
+     private int totalTargetReads = 0;
+     private int lastRssi = -999;
+@@ -145,42 +152,73 @@
+ 
+     @Override
+     public void onTags(List<UhfReader.Tag> tags) {
+-        if (tags == null || tags.isEmpty()) return;
++        if (tags == null || targetEpc.isEmpty()) return;
+ 
++        UhfReader.Tag target = null;
+         for (UhfReader.Tag t : tags) {
+             if (t == null || t.epc == null) continue;
+-            String normalized = normalizeTag(t.epc);
+-
+-            // Match only the target file's tag
+-            if (!targetEpc.isEmpty() && normalized.equals(targetEpc)) {
+-                hasSeenTarget = true;
+-                totalTargetReads++;
+-                lastRssi = t.rssi;
+-
+-                // Scale RSSI: -58 dBm = 0%, -8 dBm = 100%
+-                float rawTarget = (t.rssi - (-58f)) / (-8f - (-58f));
+-                rawTarget = Math.max(0.06f, Math.min(1.0f, rawTarget));
+-
+-                // Log-distance physical estimation
+-                estDistanceMeters = (float) Math.pow(10.0, (-8.0 - t.rssi) / 22.0);
+-                estDistanceMeters = Math.max(0.1f, Math.min(8.0f, Math.round(estDistanceMeters * 10f) / 10f));
+-
+-                // Instant rise on detection
+-                smoothStrength += (rawTarget - smoothStrength) * 0.92f;
+-                targetBearing = currentHeading; // Lock peak bearing
++            if (normalizeTag(t.epc).equals(targetEpc)) {
++                target = t;
+                 break;
+             }
+         }
+ 
+-        soundLocator.setStrength(smoothStrength);
++        // The SDK list is cumulative and is polled every ~25 ms, so the same entry keeps coming
++        // back even when the radio has not heard the tag again. Only an increase of the read
++        // counter is a fresh read. (A lower counter means a new trigger press cleared the list.)
++        boolean fresh = target != null && target.count != lastTargetCount;
++
++        if (fresh) {
++            int prev = Math.max(lastTargetCount, 0);
++            int newReads = target.count > prev ? target.count - prev : Math.max(1, target.count);
++            lastTargetCount = target.count;
++
++            hasSeenTarget = true;
++            totalTargetReads += newReads;
++            lastRssi = target.rssi;
++
++            // Where the reader pointed WHEN this read happened feeds the estimate; the estimate
++            // itself stays put in the room.
++            estimator.addRead(currentHeading, target.rssi, newReads);
++            targetBearing = estimator.bearing();
++
++            // Scale RSSI: -58 dBm = 0%, -8 dBm = 100%
++            float rawNow = clamp01((target.rssi + 58f) / 50f, 0.06f);
++            float rawPeak = clamp01((estimator.bestRssi() + 58f) / 50f, 0.06f);
++            liveStrength += (rawNow - liveStrength) * 0.6f;
++            peakStrength = rawPeak;
++
++            // Log-distance estimate from the PEAK signal, so it does not jitter with aim.
++            estDistanceMeters = (float) Math.pow(10.0, (-8.0 - estimator.bestRssi()) / 22.0);
++            estDistanceMeters = Math.max(0.1f, Math.min(8.0f, Math.round(estDistanceMeters * 10f) / 10f));
++        } else {
++            // No new read: the tag is out of the beam right now. Fade the live signal only.
++            liveStrength *= 0.9f;
++            if (liveStrength < 0.02f) liveStrength = 0f;
++        }
++
++        soundLocator.setStrength(liveStrength);
+         renderUI();
+     }
+ 
++    private static float clamp01(float v, float min) {
++        return Math.max(min, Math.min(1.0f, v));
++    }
++
+     @Override
+     public void onState(boolean available, boolean reading, String message) {
+         if (targetEpc.isEmpty()) return;
++        triggerHeld = reading;
++        if (!reading) {
++            // Trigger released: stop the live signal and the sound. The dot and its bearing
++            // are left exactly where they are, because the file has not moved.
++            liveStrength = 0f;
++            soundLocator.setStrength(0f);
++            if (hasSeenTarget) renderUI();
++        }
+         if (!hasSeenTarget) {
+-            tvSignalReadout.setText(reading ? "Scanning shelf tags..." : "Hold trigger to scan");
++            tvSignalReadout.setText(reading ? "Scanning... tag not in range yet" : "Hold trigger to scan");
++            renderUI();
+         }
+     }
+ 
+@@ -214,10 +252,12 @@
+         if (diff < -180f) diff += 360f;
+ 
+         boolean inBeam = Math.abs(diff) <= 28f;
+-        boolean isPinpoint = inBeam && smoothStrength >= 0.82f;
++        boolean isPinpoint = inBeam && peakStrength >= 0.82f;
+ 
+         if (!hasSeenTarget) {
+-            tvGuidance.setText("HOLD TRIGGER & SWEEP AROUND ROOM");
++            tvGuidance.setText(triggerHeld
++                    ? "TAG NOT DETECTED - KEEP SCANNING AND MOVING"
++                    : "HOLD TRIGGER & SWEEP AROUND ROOM");
+             tvGuidance.setBackgroundColor(Color.parseColor("#334155"));
+         } else if (isPinpoint) {
+             tvGuidance.setText("EXACT FILE - PINPOINT (under 15 cm)");
+@@ -237,7 +277,7 @@
+             tvGuidance.setBackgroundColor(Color.parseColor("#DC2626"));
+         }
+ 
+-        int pct = Math.round(smoothStrength * 100f);
++        int pct = Math.round(liveStrength * 100f);
+         pbSignal.setProgress(pct);
+ 
+         if (hasSeenTarget) {
+@@ -245,7 +285,7 @@
+                     pct, lastRssi, estDistanceMeters, totalTargetReads));
+         }
+ 
+-        radarView.update(smoothStrength, currentHeading, targetBearing, inBeam, isPinpoint, hasSeenTarget);
++        radarView.update(peakStrength, currentHeading, targetBearing, inBeam, isPinpoint, hasSeenTarget);
+     }
+ 
+     private static String normalizeTag(String s) {
+--- /dev/null
++++ b/app/src/main/java/com/example/rfid/TagBearingEstimator.java
+@@ -0,0 +1,87 @@
++package com.example.rfid;
++
++/**
++ * Works out WHERE a stationary tag is, in compass degrees, from the readings made while the
++ * operator sweeps the reader around.
++ *
++ * A tag never moves, so its bearing must not follow the reader. The reader's antenna is
++ * strongest when it points at the tag, so the best estimate of the bearing is the compass
++ * heading at which the signal was strongest. To be stable against single noisy reads this
++ * class takes a signal-weighted circular average of the headings of the strongest reads
++ * (those within WINDOW_DB of the best signal seen), instead of the latest heading.
++ *
++ * Only call addRead() for a FRESH read (the SDK read counter went up). Never call it for a
++ * repeated poll of old data, and never call it when the trigger is released: the estimate
++ * simply stays where it is.
++ *
++ * Plain Java, no Android classes.
++ */
++final class TagBearingEstimator {
++
++    /** Reads weaker than (best - WINDOW_DB) are outside the antenna's main lobe and ignored. */
++    static final float WINDOW_DB = 8f;
++
++    /** Old reads lose influence slowly (per fresh read), so a new position can take over. */
++    private static final double FORGET = 0.995;
++
++    /** The remembered best signal sinks slowly (per fresh read) so moving away is noticed. */
++    private static final float PEAK_SINK_DB = 0.01f;
++
++    /** One poll may represent several reads; do not let a burst dominate. */
++    private static final int MAX_BURST = 10;
++
++    private double sumX = 0;   // sum of weight * sin(heading)
++    private double sumY = 0;   // sum of weight * cos(heading)
++    private float bestRssi = 0f;
++    private boolean hasRead = false;
++    private float bearing = 0f;
++
++    boolean hasEstimate() {
++        return hasRead;
++    }
++
++    /** Strongest raw signal value currently remembered. Only meaningful if hasEstimate(). */
++    float bestRssi() {
++        return bestRssi;
++    }
++
++    /** Estimated tag bearing, 0..360 degrees (compass). */
++    float bearing() {
++        return bearing;
++    }
++
++    void addRead(float headingDeg, int rssi, int newReads) {
++        sumX *= FORGET;
++        sumY *= FORGET;
++
++        if (!hasRead) {
++            hasRead = true;
++            bestRssi = rssi;
++        } else {
++            bestRssi -= PEAK_SINK_DB;
++        }
++
++        // A clearly better lobe than anything remembered: older headings no longer count.
++        if (rssi > bestRssi + WINDOW_DB) {
++            sumX = 0;
++            sumY = 0;
++        }
++        if (rssi > bestRssi) {
++            bestRssi = rssi;
++        }
++
++        if (rssi >= bestRssi - WINDOW_DB) {
++            double weight = Math.pow(10.0, (rssi - bestRssi) / 20.0)
++                    * Math.max(1, Math.min(newReads, MAX_BURST));
++            double h = Math.toRadians(headingDeg);
++            sumX += weight * Math.sin(h);
++            sumY += weight * Math.cos(h);
++        }
++
++        if (Math.hypot(sumX, sumY) > 1e-9) {
++            double deg = Math.toDegrees(Math.atan2(sumX, sumY));
++            if (deg < 0) deg += 360.0;
++            bearing = (float) deg;
++        }
++    }
++}

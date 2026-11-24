@@ -17,12 +17,13 @@
             android:id="@+id/btn_back"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
-            android:text="← Back"
+            android:text="Back"
             android:textSize="14sp"
             android:textColor="#FFFFFF"
             android:backgroundTint="#334155" />
 
         <TextView
+            android:id="@+id/tv_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -36,7 +37,7 @@
             android:id="@+id/btn_mute"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
-            android:text="🔊 Audio"
+            android:text="Audio On"
             android:textSize="13sp"
             android:textColor="#FFFFFF"
             android:backgroundTint="#334155" />
@@ -56,7 +57,7 @@
             android:id="@+id/tv_file_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Case File"
+            android:text=""
             android:textColor="#F8FAFC"
             android:textSize="17sp"
             android:textStyle="bold" />
@@ -72,7 +73,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="File ID: 001"
+                android:text=""
                 android:textColor="#94A3B8"
                 android:textSize="13sp" />
 
@@ -81,7 +82,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Case: CASE-002"
+                android:text=""
                 android:textColor="#94A3B8"
                 android:textSize="13sp" />
         </LinearLayout>
@@ -91,7 +92,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Location: Shelf Room"
+            android:text=""
             android:textColor="#38BDF8"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -137,9 +138,47 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:gravity="center"
-        android:text="Ready · Pull trigger to scan"
+        android:text="Ready - pull trigger to scan"
         android:textColor="#94A3B8"
         android:textSize="14sp"
         android:fontFamily="monospace" />
+
+    <!-- Reader power: lower = more accurate direction, higher = longer range -->
+    <TextView
+        android:id="@+id/tv_power"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:text="Reader power"
+        android:textColor="#F8FAFC"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <SeekBar
+        android:id="@+id/sb_power"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="25"
+        android:progress="15"
+        android:progressTint="#22C55E"
+        android:thumbTint="#22C55E" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Lower power: more accurate direction. Higher power: longer range."
+        android:textColor="#94A3B8"
+        android:textSize="12sp" />
+
+    <!-- Diagnostics: tap the title above to show or hide -->
+    <TextView
+        android:id="@+id/tv_debug"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:fontFamily="monospace"
+        android:textColor="#FACC15"
+        android:textSize="11sp"
+        android:visibility="gone" />
 
 </LinearLayout>

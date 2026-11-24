@@ -384,79 +384,59 @@ public class MainActivity extends AppCompatActivity implements UhfReader.Listene
         }
     }
 
-    private void showNativeSearchDialog() {
-        final EditText input = new EditText(this);
-        input.setHint("Enter File ID or Case (e.g. 001)");
-        input.setText("001");
-        input.setSelectAllOnFocus(true);
-        input.setTextColor(android.graphics.Color.BLACK);
+    // ---- native file search (see FileSearchDialog, FileApiClient and ApiConfig) ----
 
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Native Radar File Locator")
-                .setMessage("Enter the File ID or Case Number to track with 60 FPS hardware radar:")
-                .setView(input)
-                .setPositiveButton("Start Radar", (dialog, which) -> {
-                    String query = input.getText().toString().trim();
-                    if (!query.isEmpty()) {
-                        lookupAndLaunchRadar(query);
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+    private void showNativeSearchDialog() {
+        new FileSearchDialog(this, savedUrl(), this::readDashboardToken, this::openRadar).show();
     }
 
-    private void lookupAndLaunchRadar(String query) {
-        String urlStr = savedUrl();
-        String host = Uri.parse(urlStr).getHost();
-        if (host == null || host.isEmpty()) host = "172.20.10.4";
-        final String apiEndpoint = "http://" + host + ":4000/api/files?search=" + Uri.encode(query);
+    private void openRadar(FileApiClient.FileInfo file) {
+        android.content.Intent intent = new android.content.Intent(this, RadarActivity.class);
+        intent.putExtra("fileId", file.fileId);
+        intent.putExtra("fileName", file.fileName);
+        intent.putExtra("caseId", file.caseId);
+        intent.putExtra("rfidTag", file.rfidTag);
+        intent.putExtra("storageLocation", file.storageLocation);
+        startActivity(intent);
+    }
 
-        new Thread(() -> {
-            String fileId = query;
-            String fileName = "File " + query;
-            String caseId = "—";
-            String rfidTag = "";
-            String storageLocation = "Shelf Room";
+    /**
+     * The backend requires a login, so borrow the token of the session that is already logged in
+     * inside the dashboard WebView. Delivers null if the dashboard is not loaded or no token is
+     * found (the request is then sent without one and the server's answer is shown to the user).
+     */
+    private void readDashboardToken(FileSearchDialog.TokenCallback callback) {
+        if (!pageReady) {
+            callback.onToken(null);
+            return;
+        }
+        org.json.JSONArray keys = new org.json.JSONArray();
+        for (String k : ApiConfig.TOKEN_STORAGE_KEYS) keys.put(k);
 
+        String js = "(function(){var keys=" + keys + ";"
+                + "var stores=[window.localStorage,window.sessionStorage];"
+                + "for(var s=0;s<stores.length;s++){for(var i=0;i<keys.length;i++){"
+                + "try{var v=stores[s].getItem(keys[i]);if(!v)continue;"
+                + "try{var j=JSON.parse(v);"
+                + "if(typeof j==='string'){v=j;}"
+                + "else if(j&&typeof j==='object'){"
+                + "v=j.token||j.accessToken||j.access_token||(j.state&&(j.state.token||j.state.accessToken))||'';}"
+                + "}catch(e){}"
+                + "if(v)return v;}catch(e){}}}"
+                + "return '';})()";
+
+        web.evaluateJavascript(js, value -> {
+            String token = null;
             try {
-                java.net.URL url = new java.net.URL(apiEndpoint);
-                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-                conn.setConnectTimeout(2000);
-                conn.setReadTimeout(2000);
-                if (conn.getResponseCode() == 200) {
-                    java.io.InputStream in = conn.getInputStream();
-                    java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(in));
-                    StringBuilder sb = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) sb.append(line);
-                    org.json.JSONObject obj = new org.json.JSONObject(sb.toString());
-                    org.json.JSONArray items = obj.optJSONArray("items");
-                    if (items != null && items.length() > 0) {
-                        org.json.JSONObject first = items.getJSONObject(0);
-                        fileId = first.optString("fileId", fileId);
-                        fileName = first.optString("fileName", fileName);
-                        caseId = first.optString("caseId", caseId);
-                        rfidTag = first.optString("rfidTag", "");
-                        storageLocation = first.optString("storageLocation", storageLocation);
+                if (value != null && !value.equals("null")) {
+                    Object parsed = new org.json.JSONTokener(value).nextValue();
+                    if (parsed instanceof String && !((String) parsed).isEmpty()) {
+                        token = (String) parsed;
                     }
                 }
-            } catch (Throwable ignored) {}
-
-            final String fId = fileId;
-            final String fName = fileName;
-            final String cId = caseId;
-            final String rTag = rfidTag;
-            final String sLoc = storageLocation;
-
-            runOnUiThread(() -> {
-                android.content.Intent intent = new android.content.Intent(MainActivity.this, RadarActivity.class);
-                intent.putExtra("fileId", fId);
-                intent.putExtra("fileName", fName);
-                intent.putExtra("caseId", cId);
-                intent.putExtra("rfidTag", rTag);
-                intent.putExtra("storageLocation", sLoc);
-                startActivity(intent);
-            });
-        }).start();
+            } catch (Exception ignored) {
+            }
+            callback.onToken(token);
+        });
     }
 }

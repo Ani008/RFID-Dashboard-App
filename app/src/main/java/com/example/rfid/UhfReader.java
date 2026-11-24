@@ -71,6 +71,8 @@ public final class UhfReader {
     private boolean open;
     private boolean reading;
     private volatile int power = 30; // default output power (dBm)
+    /** Power requested by the UI (0 = none requested). Applied on open and before each scan. */
+    private volatile int desiredPower = 0;
 
     private ScanKeyService scanKeys;
     // Created lazily inside try/catch: if the SDK classes are only stubs (or missing) on this
@@ -140,11 +142,41 @@ public final class UhfReader {
         return power;
     }
 
+    /**
+     * Sets the transmit power in dBm (the SDK accepts 0 to 30). Lower power makes the reader
+     * hear a tag only when it is pointed at it, which gives a more accurate direction; higher
+     * power reaches farther but also hears tags from the sides and from reflections.
+     * It takes effect immediately if the reader is idle, otherwise at the next trigger press.
+     */
+    public void setPowerLevel(int dbm) {
+        final int p = Math.max(1, Math.min(30, dbm));
+        desiredPower = p;
+        worker.post(() -> {
+            if (open && !reading) applyDesiredPower();
+        });
+    }
+
+    /** Worker thread only. */
+    private void applyDesiredPower() {
+        int p = desiredPower;
+        if (p <= 0 || device == null) return;
+        try {
+            if (device.setPower(p)) {
+                power = p;
+            } else {
+                Log.w(TAG, "setPower(" + p + ") was refused by the reader");
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "setPower failed", t);
+        }
+    }
+
     public void startReading() {
         worker.post(() -> {
             if (reading) return;
             if (!open) openInternal();
             if (!open) return;
+            applyDesiredPower();
             try {
                 int p = device.getPower();
                 if (p > 0) power = p;
@@ -223,6 +255,7 @@ public final class UhfReader {
             if (open) {
                 // Start every trigger press with an empty list, so counts mean "this scan".
                 device.setParameters(UHFService.PARAMETER_CLEAR_EPCLIST_WHEN_START_INVENTORY, 1);
+                applyDesiredPower();
                 try {
                     int p = device.getPower();
                     if (p > 0) power = p;

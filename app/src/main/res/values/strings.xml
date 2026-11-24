@@ -17,4 +17,13 @@
     <string name="no_tags_yet">No tags read yet</string>
     <string name="url_invalid">Enter a full address starting with http:// or https://</string>
     <string name="blocked_navigation">Only the dashboard can be opened here</string>
+
+    <string name="open_radar_locator">Open Native Radar Locator</string>
+    <string name="search_title">Locate File</string>
+    <string name="search_subtitle">Enter the File ID to find it on the dashboard and start the radar.</string>
+    <string name="search_hint">File ID</string>
+    <string name="search_submit">Search</string>
+    <string name="search_cancel">Cancel</string>
+    <string name="search_empty">Enter a File ID to search.</string>
+    <string name="search_no_address">The dashboard address is not set. Enter it below, save it, and try again.</string>
 </resources>
