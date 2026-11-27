@@ -2,6 +2,7 @@ package com.example.rfid;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -10,13 +11,19 @@ import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
+
+import com.google.android.material.button.MaterialButton;
 
 import java.util.List;
 import java.util.Locale;
@@ -46,7 +53,10 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
     private TextView tvGuidance;
     private TextView tvSignalReadout;
     private ProgressBar pbSignal;
-    private Button btnMute;
+    private MaterialButton btnMute;
+    private TextView tvHeading;
+    private TextView tvDistance;
+    private int lastShownHeading = -1;
     private TextView tvPower;
     private TextView tvDebug;
     private boolean debugVisible = false;
@@ -107,7 +117,24 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        WindowCompat.enableEdgeToEdge(getWindow());
+        // Dark screen: keep the status and navigation bar icons light.
+        WindowInsetsControllerCompat bars =
+                new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
+        bars.setAppearanceLightStatusBars(false);
+        bars.setAppearanceLightNavigationBars(false);
         setContentView(R.layout.activity_radar);
+
+        // Keep the content clear of the status and navigation bars (edge-to-edge is enforced
+        // on new Android versions). The layout's own padding is added on top.
+        final View root = findViewById(R.id.radar_root);
+        final int padL = root.getPaddingLeft(), padT = root.getPaddingTop();
+        final int padR = root.getPaddingRight(), padB = root.getPaddingBottom();
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            Insets sys = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(padL + sys.left, padT + sys.top, padR + sys.right, padB + sys.bottom);
+            return insets;
+        });
 
         // Retrieve extras
         targetEpc = normalizeTag(getIntent().getStringExtra("rfidTag"));
@@ -130,6 +157,8 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
         tvSignalReadout = findViewById(R.id.tv_signal_readout);
         pbSignal = findViewById(R.id.pb_signal);
         btnMute = findViewById(R.id.btn_mute);
+        tvHeading = findViewById(R.id.tv_heading);
+        tvDistance = findViewById(R.id.tv_distance);
 
         tvFileTitle.setText(fileName);
         tvFileId.setText("File ID: " + fileId);
@@ -138,7 +167,7 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
 
         if (targetEpc.isEmpty()) {
             tvGuidance.setText("NO RFID TAG IS REGISTERED FOR THIS FILE");
-            tvGuidance.setBackgroundColor(Color.parseColor("#DC2626"));
+            setGuidanceColor("#C9373D");
             tvSignalReadout.setText("Register a tag for this file on the dashboard");
         }
 
@@ -146,7 +175,9 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
         btnMute.setOnClickListener(v -> {
             boolean nextMuted = !soundLocator.isMuted();
             soundLocator.setMuted(nextMuted);
-            btnMute.setText(nextMuted ? "Audio Off" : "Audio On");
+            btnMute.setIconResource(nextMuted ? R.drawable.ic_volume_off : R.drawable.ic_volume_up);
+            btnMute.setContentDescription(getString(nextMuted ? R.string.radar_audio_off : R.string.radar_audio_on));
+            btnMute.setIconTint(ColorStateList.valueOf(Color.parseColor(nextMuted ? "#9AABC7" : "#E6C766")));
         });
 
         reader = new UhfReader(this, this);
@@ -330,7 +361,7 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
     }
 
     private void updatePowerLabel() {
-        tvPower.setText("Reader power: " + currentPowerDbm + " dBm");
+        tvPower.setText(getString(R.string.radar_power) + "  \u00B7  " + currentPowerDbm + " dBm");
     }
 
     /** 1 at BEEP_NEAR_CM or closer, falling smoothly (log scale) to the slowest beep at BEEP_FAR_CM. */
@@ -397,8 +428,29 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
         public void onAccuracyChanged(Sensor sensor, int accuracy) {}
     };
 
+    /** Tints the rounded guidance pill (setBackgroundColor would drop the rounded shape). */
+    private void setGuidanceColor(String hex) {
+        tvGuidance.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor(hex)));
+    }
+
+    private static final String[] POINTS = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+
+    /** Big "45° NE" readout above the dial, updated only when the whole degree changes. */
+    private void renderHeading() {
+        int deg = Math.round(currentHeading) % 360;
+        if (deg == lastShownHeading) return;
+        lastShownHeading = deg;
+        String point = POINTS[Math.round(deg / 45f) % 8];
+        tvHeading.setText(String.format(Locale.US, "%d\u00B0 %s", deg, point));
+    }
+
     private void renderUI() {
-        if (targetEpc.isEmpty()) return; // no tag registered: the message from onCreate stays
+        renderHeading();
+        if (targetEpc.isEmpty()) {
+            // no tag registered: the message from onCreate stays, the compass still turns
+            radarView.update(0f, currentHeading, 0f, false, false, false);
+            return;
+        }
         float diff = (targetBearing - currentHeading) % 360f;
         if (diff > 180f) diff -= 360f;
         if (diff < -180f) diff += 360f;
@@ -410,30 +462,33 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
             tvGuidance.setText(triggerHeld
                     ? "TAG NOT DETECTED - KEEP SCANNING AND MOVING"
                     : "HOLD TRIGGER & SWEEP AROUND ROOM");
-            tvGuidance.setBackgroundColor(Color.parseColor("#334155"));
+            setGuidanceColor("#2A3B5C");
         } else if (isPinpoint) {
             tvGuidance.setText("EXACT FILE - PINPOINT");
-            tvGuidance.setBackgroundColor(Color.parseColor("#059669"));
+            setGuidanceColor("#10A06B");
         } else if (inBeam) {
             tvGuidance.setText("DIRECT AIM - IN BEAM RANGE");
-            tvGuidance.setBackgroundColor(Color.parseColor("#16A34A"));
+            setGuidanceColor("#1F9D61");
         } else if (diff < -28f && diff >= -120f) {
             tvGuidance.setText(String.format(Locale.US, "TURN LEFT (%d deg)", Math.round(Math.abs(diff))));
-            tvGuidance.setBackgroundColor(Color.parseColor("#B45309"));
+            setGuidanceColor("#C77C0E");
         } else if (diff > 28f && diff <= 120f) {
             tvGuidance.setText(String.format(Locale.US, "TURN RIGHT (%d deg)", Math.round(Math.abs(diff))));
-            tvGuidance.setBackgroundColor(Color.parseColor("#B45309"));
+            setGuidanceColor("#C77C0E");
         } else {
             tvGuidance.setText("BEHIND YOU - TURN AROUND");
-            tvGuidance.setBackgroundColor(Color.parseColor("#DC2626"));
+            setGuidanceColor("#C9373D");
         }
 
         int pct = Math.round(liveStrength * 100f);
         pbSignal.setProgress(pct);
 
         if (hasSeenTarget) {
-            tvSignalReadout.setText(triggerHeld ? "Tag detected" : "Trigger released - position held");
+            tvSignalReadout.setText(triggerHeld
+                    ? String.format(Locale.US, "Tag detected  \u00B7  %d%%", pct)
+                    : "Trigger released - position held");
         }
+        tvDistance.setText(distanceCm > 0f ? formatDistance(distanceCm) : "--");
 
         if (debugVisible) {
             tvDebug.setText(String.format(Locale.US,

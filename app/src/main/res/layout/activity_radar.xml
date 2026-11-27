@@ -1,124 +1,192 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/radar_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/hc_navy_900"
     android:orientation="vertical"
-    android:background="#0F172A"
-    android:padding="16dp">
+    android:paddingStart="14dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="14dp"
+    android:paddingBottom="12dp">
 
-    <!-- Top Bar -->
+    <!-- ===== Top bar ===== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_back"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:text="Back"
-            android:textSize="14sp"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#334155" />
+            style="@style/Widget.Material3.Button.IconButton.Outlined"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:contentDescription="@string/radar_back"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            app:icon="@drawable/ic_arrow_back"
+            app:iconTint="@color/hc_text_on_dark"
+            app:strokeColor="@color/hc_navy_line" />
 
-        <TextView
+        <LinearLayout
             android:id="@+id/tv_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Native File Locator"
-            android:textColor="#F8FAFC"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:gravity="center" />
+            android:gravity="center"
+            android:orientation="vertical">
 
-        <Button
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.16"
+                android:text="@string/header_overline"
+                android:textAllCaps="true"
+                android:textColor="@color/hc_gold"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="serif"
+                android:text="@string/radar_title"
+                android:textColor="@color/hc_text_on_dark"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_mute"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:text="Audio On"
-            android:textSize="13sp"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#334155" />
+            style="@style/Widget.Material3.Button.IconButton.Outlined"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:contentDescription="@string/radar_audio_on"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            app:icon="@drawable/ic_volume_up"
+            app:iconTint="@color/hc_gold_light"
+            app:strokeColor="@color/hc_navy_line" />
     </LinearLayout>
 
-    <!-- File Target Details Card -->
-    <LinearLayout
+    <!-- ===== Target file card ===== -->
+    <com.google.android.material.card.MaterialCardView
+        style="@style/HC.Card.Dark"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:background="#1E293B"
-        android:padding="14dp"
-        android:layout_marginTop="12dp"
-        android:elevation="4dp">
-
-        <TextView
-            android:id="@+id/tv_file_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text=""
-            android:textColor="#F8FAFC"
-            android:textSize="17sp"
-            android:textStyle="bold" />
+        android:layout_marginTop="10dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="6dp">
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="12dp">
 
             <TextView
-                android:id="@+id/tv_file_id"
-                android:layout_width="0dp"
+                style="@style/HC.SectionLabel.Dark"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text=""
-                android:textColor="#94A3B8"
-                android:textSize="13sp" />
+                android:text="@string/radar_target_file" />
 
             <TextView
-                android:id="@+id/tv_case_id"
-                android:layout_width="0dp"
+                android:id="@+id/tv_file_title"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:fontFamily="serif"
+                android:maxLines="2"
                 android:text=""
-                android:textColor="#94A3B8"
-                android:textSize="13sp" />
+                android:textColor="@color/hc_text_on_dark"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_file_id"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text=""
+                    android:textColor="@color/hc_text_on_dark_muted"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/tv_case_id"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text=""
+                    android:textColor="@color/hc_text_on_dark_muted"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_storage_location"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=""
+                android:textColor="@color/hc_gold_light"
+                android:textSize="13sp"
+                android:textStyle="bold" />
         </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
-        <TextView
-            android:id="@+id/tv_storage_location"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text=""
-            android:textColor="#38BDF8"
-            android:textSize="13sp"
-            android:textStyle="bold" />
-    </LinearLayout>
-
-    <!-- Direction Guidance Pill -->
+    <!-- ===== Direction guidance pill (colour set at runtime) ===== -->
     <TextView
         android:id="@+id/tv_guidance"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:padding="10dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/bg_pill"
+        android:backgroundTint="@color/hc_slate"
         android:gravity="center"
-        android:background="#334155"
-        android:textColor="#FFFFFF"
-        android:textSize="15sp"
-        android:textStyle="bold"
-        android:text="HOLD TRIGGER &amp; SWEEP AROUND ROOM" />
+        android:letterSpacing="0.04"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:text="HOLD TRIGGER &amp; SWEEP AROUND ROOM"
+        android:textColor="@color/white"
+        android:textSize="14sp"
+        android:textStyle="bold" />
 
-    <!-- 60 FPS GPU-Accelerated Radar View -->
+    <!-- ===== Live compass heading ===== -->
+    <TextView
+        android:id="@+id/tv_heading"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:fontFamily="sans-serif-light"
+        android:gravity="center"
+        android:text="0° N"
+        android:textColor="@color/hc_text_on_dark"
+        android:textSize="30sp" />
+
+    <!-- ===== Rotating compass dial + radar ===== -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginTop="12dp"
-        android:layout_marginBottom="12dp">
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="8dp">
 
         <com.example.rfid.RadarView
             android:id="@+id/radar_view"
@@ -131,61 +199,139 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|start"
-            android:background="#B3000000"
-            android:padding="6dp"
+            android:background="#CC000000"
             android:fontFamily="monospace"
-            android:textColor="#FACC15"
+            android:padding="6dp"
+            android:textColor="@color/hc_gold_light"
             android:textSize="11sp"
             android:visibility="gone" />
     </FrameLayout>
 
-    <!-- Signal Bar & Readout -->
-    <ProgressBar
-        android:id="@+id/pb_signal"
-        style="?android:attr/progressBarStyleHorizontal"
+    <!-- ===== Distance + signal ===== -->
+    <com.google.android.material.card.MaterialCardView
+        style="@style/HC.Card.Dark"
         android:layout_width="match_parent"
-        android:layout_height="14dp"
-        android:max="100"
-        android:progress="0"
-        android:progressTint="#22C55E"
-        android:backgroundTint="#334155" />
+        android:layout_height="wrap_content">
 
-    <TextView
-        android:id="@+id/tv_signal_readout"
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:baselineAligned="false"
+            android:orientation="horizontal"
+            android:padding="14dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.8"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/HC.SectionLabel.Dark"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/radar_distance" />
+
+                <TextView
+                    android:id="@+id/tv_distance"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="--"
+                    android:textColor="@color/hc_gold_light"
+                    android:textSize="24sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="14dp"
+                android:background="@color/hc_navy_line" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.4"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/HC.SectionLabel.Dark"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/radar_signal" />
+
+                <ProgressBar
+                    android:id="@+id/pb_signal"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="10dp"
+                    android:layout_marginTop="8dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:progressDrawable="@drawable/progress_signal" />
+
+                <TextView
+                    android:id="@+id/tv_signal_readout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:text="Ready - pull trigger to scan"
+                    android:textColor="@color/hc_text_on_dark_muted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- ===== Reader power: lower = more accurate direction, higher = longer range ===== -->
+    <com.google.android.material.card.MaterialCardView
+        style="@style/HC.Card.Dark"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:gravity="center"
-        android:text="Ready - pull trigger to scan"
-        android:textColor="#94A3B8"
-        android:textSize="14sp"
-        android:fontFamily="monospace" />
+        android:layout_marginTop="8dp">
 
-    <!-- Reader power: lower = more accurate direction, higher = longer range -->
-    <TextView
-        android:id="@+id/tv_power"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:text="Reader power"
-        android:textColor="#F8FAFC"
-        android:textSize="13sp"
-        android:textStyle="bold" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="14dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="10dp">
 
-    <SeekBar
-        android:id="@+id/sb_power"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:max="25"
-        android:progress="15"
-        android:progressTint="#22C55E"
-        android:thumbTint="#22C55E" />
+            <TextView
+                android:id="@+id/tv_power"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/radar_power"
+                android:textColor="@color/hc_text_on_dark"
+                android:textSize="13sp"
+                android:textStyle="bold" />
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Lower power: more accurate direction. Higher power: longer range."
-        android:textColor="#94A3B8"
-        android:textSize="12sp" />
+            <SeekBar
+                android:id="@+id/sb_power"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:max="25"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:progress="15"
+                android:progressBackgroundTint="@color/hc_navy_line"
+                android:progressTint="@color/hc_gold"
+                android:thumbTint="@color/hc_gold_light" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/radar_power_hint"
+                android:textColor="@color/hc_text_on_dark_muted"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
 </LinearLayout>

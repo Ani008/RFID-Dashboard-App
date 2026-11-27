@@ -19,7 +19,6 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -51,7 +50,8 @@ public class MainActivity extends AppCompatActivity implements UhfReader.Listene
     private View setupPanel;
     private TextView readerStatus;
     private TextView tagList;
-    private Button testScan;
+    private com.google.android.material.button.MaterialButton testScan;
+    private View readerStatusDot;
     private EditText urlField;
 
     private UhfReader reader;
@@ -103,6 +103,7 @@ public class MainActivity extends AppCompatActivity implements UhfReader.Listene
         readerStatus = findViewById(R.id.reader_status);
         tagList = findViewById(R.id.tag_list);
         testScan = findViewById(R.id.btn_test_scan);
+        readerStatusDot = findViewById(R.id.reader_status_dot);
         urlField = findViewById(R.id.dashboard_url);
 
         reader = new UhfReader(this, this);
@@ -130,7 +131,6 @@ public class MainActivity extends AppCompatActivity implements UhfReader.Listene
         testScan.setOnClickListener(v -> reader.toggleReading());
         findViewById(R.id.btn_launch_radar).setOnClickListener(v -> showNativeSearchDialog());
         findViewById(R.id.btn_save).setOnClickListener(v -> saveUrlAndLoad());
-        findViewById(R.id.btn_close).setOnClickListener(v -> closeSetup());
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -286,6 +286,12 @@ public class MainActivity extends AppCompatActivity implements UhfReader.Listene
         }
         readerStatus.setText(status);
         testScan.setText(readerReading ? R.string.test_scan_stop : R.string.test_scan_start);
+        testScan.setIconResource(readerReading ? R.drawable.ic_stop : R.drawable.ic_play);
+        // Green = reading, navy = ready, amber = starting / not available
+        int dot = readerReading ? R.color.hc_green
+                : readerAvailable ? R.color.hc_navy_600 : R.color.hc_amber;
+        readerStatusDot.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                androidx.core.content.ContextCompat.getColor(this, dot)));
     }
 
     // ---- dashboard address ----

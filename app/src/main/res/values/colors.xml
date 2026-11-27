@@ -2,4 +2,25 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- High Court palette: deep navy, brass gold, ivory paper -->
+    <color name="hc_navy_900">#FF07142B</color>
+    <color name="hc_navy_800">#FF0B1D3A</color>
+    <color name="hc_navy_700">#FF12284D</color>
+    <color name="hc_navy_600">#FF1B355F</color>
+    <color name="hc_navy_line">#FF2A4470</color>
+    <color name="hc_gold">#FFC9A227</color>
+    <color name="hc_gold_light">#FFE6C766</color>
+    <color name="hc_gold_soft">#1FC9A227</color>
+    <color name="hc_ivory">#FFF6F4EE</color>
+    <color name="hc_surface">#FFFFFFFF</color>
+    <color name="hc_outline">#FFE2DED3</color>
+    <color name="hc_text">#FF0F1B2D</color>
+    <color name="hc_text_muted">#FF5D6B80</color>
+    <color name="hc_text_on_dark">#FFF3F5FA</color>
+    <color name="hc_text_on_dark_muted">#FF9AABC7</color>
+    <color name="hc_green">#FF1F9D61</color>
+    <color name="hc_amber">#FFC77C0E</color>
+    <color name="hc_red">#FFC9373D</color>
+    <color name="hc_slate">#FF2A3B5C</color>
 </resources>

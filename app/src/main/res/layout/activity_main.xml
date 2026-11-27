@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/hc_ivory"
     tools:context=".MainActivity">
 
     <WebView
@@ -11,13 +13,14 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Setup / reader test panel. Shown on first run, when the dashboard cannot load,
+    <!-- Setup / reader console. Shown on first run, when the dashboard cannot load,
          and when Back is pressed on the dashboard's first page. -->
     <ScrollView
         android:id="@+id/setup_panel"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@color/white"
+        android:background="@color/hc_ivory"
+        android:clipToPadding="false"
         android:fillViewport="true"
         android:visibility="gone">
 
@@ -25,92 +28,262 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:paddingBottom="24dp">
 
-            <TextView
+            <!-- ===== Header ===== -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/setup_title"
-                android:textColor="@color/black"
-                android:textSize="22sp"
-                android:textStyle="bold" />
+                android:background="@drawable/bg_header"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="20dp"
+                android:paddingTop="24dp"
+                android:paddingEnd="20dp"
+                android:paddingBottom="28dp">
 
-            <TextView
-                android:id="@+id/reader_status"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:textColor="@color/black"
-                android:textSize="16sp" />
+                <FrameLayout
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:background="@drawable/bg_icon_circle_gold">
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="@string/setup_hint"
-                android:textColor="#FF555555"
-                android:textSize="14sp" />
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_court"
+                        app:tint="@color/hc_gold_light" />
+                </FrameLayout>
 
-            <TextView
-                android:id="@+id/tag_list"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:background="#FFF2F2F2"
-                android:fontFamily="monospace"
-                android:minHeight="120dp"
-                android:padding="10dp"
-                android:text="@string/no_tags_yet"
-                android:textColor="@color/black"
-                android:textSize="13sp" />
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-            <Button
-                android:id="@+id/btn_test_scan"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/test_scan_start" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:letterSpacing="0.14"
+                        android:text="@string/header_overline"
+                        android:textAllCaps="true"
+                        android:textColor="@color/hc_gold_light"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
 
-            <Button
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:fontFamily="serif"
+                        android:text="@string/setup_title"
+                        android:textColor="@color/white"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/header_subtitle"
+                        android:textColor="@color/hc_text_on_dark_muted"
+                        android:textSize="13sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ===== Primary action: locate a file ===== -->
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_launch_radar"
                 android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginEnd="16dp"
+                android:backgroundTint="@color/hc_navy_800"
+                android:letterSpacing="0.02"
+                android:text="@string/open_radar_locator"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                app:cornerRadius="16dp"
+                app:icon="@drawable/ic_search"
+                app:iconGravity="textStart"
+                app:iconPadding="10dp"
+                app:iconTint="@color/hc_gold_light"
+                app:strokeColor="@color/hc_gold"
+                app:strokeWidth="1dp" />
+
+            <!-- ===== Reader card ===== -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/HC.Card"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:backgroundTint="#059669"
-                android:textColor="#FFFFFF"
-                android:text="@string/open_radar_locator" />
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginEnd="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_sensors"
+                            app:tint="@color/hc_navy_600" />
+
+                        <TextView
+                            style="@style/HC.SectionLabel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:text="@string/section_reader" />
+
+                        <View
+                            android:id="@+id/reader_status_dot"
+                            android:layout_width="10dp"
+                            android:layout_height="10dp"
+                            android:background="@drawable/bg_status_dot"
+                            android:backgroundTint="@color/hc_amber" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/reader_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:textColor="@color/hc_text"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:lineSpacingExtra="2dp"
+                        android:text="@string/setup_hint"
+                        android:textColor="@color/hc_text_muted"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/tag_list"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:background="@drawable/bg_console"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="2dp"
+                        android:minHeight="120dp"
+                        android:padding="14dp"
+                        android:text="@string/no_tags_yet"
+                        android:textColor="@color/hc_gold_light"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_test_scan"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/test_scan_start"
+                        android:textColor="@color/hc_navy_800"
+                        android:textSize="15sp"
+                        app:cornerRadius="12dp"
+                        app:icon="@drawable/ic_play"
+                        app:iconGravity="textStart"
+                        app:iconTint="@color/hc_navy_800"
+                        app:strokeColor="@color/hc_navy_600" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ===== Dashboard address card ===== -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/HC.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginEnd="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_link"
+                            app:tint="@color/hc_navy_600" />
+
+                        <TextView
+                            style="@style/HC.SectionLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/dashboard_url_label" />
+                    </LinearLayout>
+
+                    <EditText
+                        android:id="@+id/dashboard_url"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:autofillHints="url"
+                        android:background="@drawable/bg_search_input"
+                        android:hint="@string/dashboard_url_hint"
+                        android:importantForAutofill="no"
+                        android:inputType="textUri"
+                        android:minHeight="52dp"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:singleLine="true"
+                        android:textColor="@color/hc_text"
+                        android:textColorHint="#FF9AA3B2"
+                        android:textSize="15sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_save"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:layout_marginTop="12dp"
+                        android:backgroundTint="@color/hc_gold"
+                        android:text="@string/save_and_load"
+                        android:textColor="@color/hc_navy_900"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        app:cornerRadius="12dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
-                android:text="@string/dashboard_url_label"
-                android:textColor="@color/black"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <EditText
-                android:id="@+id/dashboard_url"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:autofillHints="url"
-                android:hint="@string/dashboard_url_hint"
-                android:importantForAutofill="no"
-                android:inputType="textUri"
-                android:textColor="@color/black"
-                android:textColorHint="#FF888888" />
-
-            <Button
-                android:id="@+id/btn_save"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/save_and_load" />
-
-            <Button
-                android:id="@+id/btn_close"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/close_setup" />
+                android:gravity="center"
+                android:text="@string/footer_note"
+                android:textColor="@color/hc_text_muted"
+                android:textSize="11sp" />
         </LinearLayout>
     </ScrollView>
 </FrameLayout>
