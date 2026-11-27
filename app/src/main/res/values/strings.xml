@@ -6,11 +6,12 @@
          Or put the real address here, e.g. http://192.168.1.50:3000 -->
     <string name="default_dashboard_url"></string>
 
-    <string name="header_overline">High Court</string>
+    <string name="header_overline">High Court Of Allahabad</string>
     <string name="setup_title">RFID File Tracking</string>
     <string name="header_subtitle">Reader console and file locator</string>
     <string name="section_reader">Handheld reader</string>
     <string name="footer_note">Press Back on the dashboard\'s first page to return here.</string>
+    <string name="watermark">Developed and Maintained by CALYONIX INFOTECH</string>
     <string name="setup_hint">Hold the trigger or start a test scan. Tags appear below with their signal value.</string>
     <string name="dashboard_url_label">Dashboard address</string>
     <string name="dashboard_url_hint">http://192.168.1.50:3000</string>

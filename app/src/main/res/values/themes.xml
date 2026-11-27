@@ -25,6 +25,9 @@
         <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
     </style>
 
+    <!-- Base style namespace for HC styles -->
+    <style name="HC" />
+
     <!-- Shared text styles -->
     <style name="HC.SectionLabel">
         <item name="android:textSize">11sp</item>

@@ -25,7 +25,7 @@ final class DistanceEstimator {
     static final int WINDOW = 12;
 
     /** How quickly the shown distance follows the measurement (0..1, per fresh read). */
-    private static final double FOLLOW = 0.35;
+    private static final double FOLLOW = 0.45;
 
     static final double MIN_CM = 1.0;
     static final double MAX_CM = 1000.0;
@@ -35,7 +35,7 @@ final class DistanceEstimator {
      * tag only just inside the beam) the last 12 reads can span many seconds, so one strong read
      * from when you were close kept the distance "stuck" close after you moved back.
      */
-    static final long MAX_AGE_MS = 1500;
+    static final long MAX_AGE_MS = 1000;
 
     private final int[] recent = new int[WINDOW];
     private final long[] recentAt = new long[WINDOW];
@@ -113,6 +113,9 @@ final class DistanceEstimator {
         int best = Integer.MIN_VALUE;
         for (int i = 0; i < count; i++) {
             if (lastReadMs - recentAt[i] <= MAX_AGE_MS && recent[i] > best) best = recent[i];
+        }
+        if (best == Integer.MIN_VALUE && count > 0) {
+            best = recent[(next - 1 + WINDOW) % WINDOW];
         }
         return best;
     }

@@ -33,7 +33,7 @@ public final class SoundLocator {
         this.context = context.getApplicationContext();
         this.vibrator = (Vibrator) this.context.getSystemService(Context.VIBRATOR_SERVICE);
         try {
-            toneGen = new ToneGenerator(AudioManager.STREAM_MUSIC, 85);
+            toneGen = new ToneGenerator(AudioManager.STREAM_MUSIC, 100);
         } catch (Throwable t) {
             Log.w(TAG, "ToneGenerator init failed", t);
         }
@@ -93,29 +93,34 @@ public final class SoundLocator {
             long nextDelayMs = 150;
             float s = strength;
 
-            if (!muted && s > 0.04f && toneGen != null) {
+            boolean playAudio = !muted && s > 0.04f && toneGen != null;
+            boolean doVibrate = vibrate && s > 0.04f && vibrator != null && vibrator.hasVibrator();
+
+            if (playAudio || doVibrate) {
                 // One smooth curve, no steps: s = 1 (15 cm or closer) beeps about every 45 ms;
                 // s near 0 (far) about every 900 ms; in between it speeds up gradually.
                 nextDelayMs = (long) (45 + 850 * Math.pow(1.0 - s, 1.6));
-                try {
-                    if (s >= 0.9f) {
-                        toneGen.startTone(ToneGenerator.TONE_PROP_BEEP2, 20);
-                    } else if (s >= 0.5f) {
-                        toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 30);
-                    } else if (s >= 0.3f) {
-                        toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 40);
-                    } else {
-                        toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 45);
-                    }
-                } catch (Throwable ignored) {}
 
-                // Second confirmation: buzz together with the beep when you are on top of the file.
-                if (vibrate && vibrator != null && vibrator.hasVibrator()) {
+                if (playAudio) {
+                    try {
+                        if (s >= 0.9f) {
+                            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP2, 20);
+                        } else if (s >= 0.5f) {
+                            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 30);
+                        } else if (s >= 0.3f) {
+                            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 40);
+                        } else {
+                            toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 45);
+                        }
+                    } catch (Throwable ignored) {}
+                }
+
+                if (doVibrate) {
                     try {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            vibrator.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE));
+                            vibrator.vibrate(VibrationEffect.createOneShot(35, VibrationEffect.DEFAULT_AMPLITUDE));
                         } else {
-                            vibrator.vibrate(30);
+                            vibrator.vibrate(35);
                         }
                     } catch (Throwable ignored) {}
                 }

@@ -88,6 +88,8 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
     private int totalTargetReads = 0;
     private int lastRssi = -999;
     private float distanceCm = -1f;        // estimated reader-to-tag distance, -1 = unknown
+    private long lastTargetSeenMs = 0;
+    private long lastReadProcessedMs = 0;
 
     // Distance: estimated from the signal of the most recent reads (see DistanceEstimator).
     private final DistanceEstimator distance = new DistanceEstimator();
@@ -274,51 +276,62 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
             }
         }
 
-        // The SDK list is cumulative and is polled every ~25 ms, so the same entry keeps coming
-        // back even when the radio has not heard the tag again. Only an increase of the read
-        // counter is a fresh read. (A lower counter means a new trigger press cleared the list.)
-        boolean fresh = target != null && target.count != lastTargetCount;
+        long now = System.currentTimeMillis();
 
-        if (fresh) {
-            int prev = Math.max(lastTargetCount, 0);
-            int newReads = target.count > prev ? target.count - prev : Math.max(1, target.count);
-            lastTargetCount = target.count;
-
+        if (target != null) {
             hasSeenTarget = true;
-            totalTargetReads += newReads;
-            lastRssi = target.rssi;
+            lastTargetSeenMs = now;
 
-            // Where the reader pointed WHEN this read happened feeds the estimate; the estimate
-            // itself stays put in the room.
-            estimator.addRead(currentHeading, target.rssi, newReads);
-            targetBearing = estimator.bearing();
+            // Process read if count changed, RSSI changed, or at least 40ms passed
+            boolean countChanged = (target.count != lastTargetCount);
+            boolean rssiChanged = (lastRssi != -999 && Math.abs(target.rssi - lastRssi) >= 1);
+            boolean timeElapsed = (now - lastReadProcessedMs >= 40);
 
-            // Scale RSSI: -58 dBm = 0%, -8 dBm = 100%  (signal bar and sound only)
+            if (countChanged || rssiChanged || timeElapsed || lastTargetCount == -1) {
+                int prev = Math.max(lastTargetCount, 0);
+                int newReads = (target.count > prev) ? (target.count - prev) : 1;
+
+                lastTargetCount = target.count;
+                lastRssi = target.rssi;
+                lastReadProcessedMs = now;
+                totalTargetReads += newReads;
+
+                // Bearing & distance estimation
+                estimator.addRead(currentHeading, target.rssi, newReads);
+                targetBearing = estimator.bearing();
+
+                distance.addRead(target.rssi, now);
+                updateDistanceFromEstimator();
+            }
+
+            // Live signal strength (0..1)
             float rawNow = clamp01((target.rssi + 58f) / 50f, 0.06f);
-            liveStrength += (rawNow - liveStrength) * 0.6f;
+            liveStrength += (rawNow - liveStrength) * 0.5f;
 
-            // Distance follows the signal of the last few fresh reads, so the dot moves toward the
-            // reader as you move closer and away as you back off. Stale polls never reach here.
-            distance.addRead(target.rssi);
-            updateDistanceFromEstimator();
-
-            // Beep speed and vibration come from the same distance estimate as the dot.
+            // Beep speed and vibration based directly on calculated distance
             beepLevel = beepForDistance(distanceCm);
-            if (vibrating) {
-                if (distanceCm > VIBRATE_OFF_CM) vibrating = false;
-            } else if (distanceCm > 0f && distanceCm <= VIBRATE_ON_CM) {
+
+            if (distanceCm > 0f && distanceCm <= VIBRATE_ON_CM) {
                 vibrating = true;
+            } else if (distanceCm > VIBRATE_OFF_CM) {
+                vibrating = false;
             }
         } else {
-            // No new read: the tag is out of the beam right now. Fade the live signal only.
-            liveStrength *= 0.9f;
-            if (liveStrength < 0.02f) liveStrength = 0f;
-            beepLevel *= 0.9f;
-            if (beepLevel < 0.02f) beepLevel = 0f;
+            // Target tag not seen in this poll tick
+            long silence = now - lastTargetSeenMs;
+            if (lastTargetSeenMs > 0 && silence > 350) {
+                liveStrength *= 0.85f;
+                if (liveStrength < 0.02f) liveStrength = 0f;
+                beepLevel *= 0.85f;
+                if (beepLevel < 0.02f) {
+                    beepLevel = 0f;
+                    vibrating = false;
+                }
+            }
         }
 
-        soundLocator.setStrength(beepLevel);
-        soundLocator.setVibrate(vibrating && beepLevel > 0.5f);
+        soundLocator.setStrength(triggerHeld ? beepLevel : 0f);
+        soundLocator.setVibrate(triggerHeld && vibrating);
         renderUI();
     }
 
@@ -382,14 +395,14 @@ public class RadarActivity extends AppCompatActivity implements UhfReader.Listen
         boolean wasHeld = triggerHeld;
         triggerHeld = reading;
         if (reading && !wasHeld) {
-            // New trigger press: forget the reads from the last press (you have probably moved
-            // since), so the dot, beeps and vibration follow where the reader is NOW.
+            // New trigger press: reset window & counters so reading starts fresh
             distance.resetWindow();
             lastTargetCount = -1;
+            lastTargetSeenMs = 0;
+            lastReadProcessedMs = 0;
         }
         if (!reading) {
-            // Trigger released: stop the live signal and the sound. The dot and its bearing
-            // are left exactly where they are, because the file has not moved.
+            // Trigger released: stop live signal, sound, and vibration
             liveStrength = 0f;
             beepLevel = 0f;
             vibrating = false;
